@@ -1,0 +1,117 @@
+# Operations
+
+Start/stop/reload with the destination OpenClaw Gateway's existing service manager.
+No independent daemon is installed: plugin registers its lifecycle service.
+Runtime config is generated from `.env`. After editing `PAGE_CSKH_*` values that
+feed config, run:
+
+```bash
+npm run generate-config -- --env /absolute/runtime/.env --out /absolute/runtime/config.json
+```
+
+For generated PM2 edge files as well, run:
+
+```bash
+npm run deploy-runtime -- --env /absolute/runtime/.env
+```
+
+Then restart/reload the component that reads the changed file. Secrets and config
+are read at start. KB is read fresh per job. Gateway restarts preserve DB and
+human ownership.
+
+Runtime `.env` controls:
+
+- `PAGE_CSKH_MODE=draft|live`: overrides config mode at Gateway service start.
+- `PAGE_CSKH_WAITING_RESET_SECONDS=0`: `0` disables auto reset; a positive number
+  moves `WAITING` conversations back to `BOT` after that many seconds.
+- `PAGE_CSKH_ENABLE_HUMAN_HANDOFF=true|false`: when `false`, model handoff
+  decisions are logged and answered with the clarify text, but the conversation
+  stays in `BOT` for test-heavy runs.
+- `PAGE_CSKH_EDGE_PORT=18892`: local loopback port for the PM2 webhook edge.
+  Public HTTPS must proxy the webhook path to this port, never to admin or the
+  full Gateway.
+
+## Webhook PM2 edge
+
+`page-cskh-edge` is the public webhook door:
+
+```text
+Meta/domain -> 127.0.0.1:${PAGE_CSKH_EDGE_PORT} PM2 edge -> 127.0.0.1:18789 Gateway
+```
+
+Use it to trace webhook delivery:
+
+```bash
+pm2 ls
+pm2 logs page-cskh-edge --lines 100
+tail -f /absolute/runtime/logs/edge.log
+```
+
+Expected message flow in PM2 logs:
+
+```text
+REQUEST method=POST path=/webhooks/page-cskh ...
+POST body raw=...
+POST ok ... text="..."
+POST upstream status=200
+```
+
+If PM2 shows no `REQUEST`, Meta/domain did not reach this machine. If PM2 shows
+`POST sig_fail`, App Secret does not match the Meta app sending the webhook. If
+PM2 shows `POST upstream status=200` but no reply, debug Gateway/worker:
+
+```bash
+tail -f /absolute/runtime/agent/logs/worker.log
+journalctl --user -u openclaw-gateway.service --since '10 minutes ago'
+```
+
+Restart boundaries:
+
+- Edge code, `.env` App Secret/verify token, `edge.json`, or PM2 config:
+  `pm2 restart page-cskh-edge`.
+- Worker, typing, model behavior, generated `config.json`, or handoff settings:
+  restart/reload OpenClaw Gateway.
+
+Open `http://127.0.0.1:18891/` (or configured adminPort). Enter the admin token
+privately in the browser. It is not persisted to localStorage. Click refresh to
+inspect waiting conversations and jobs; no background notification channel is wired.
+
+```bash
+npm run operator -- --config /absolute/runtime/config.json status
+npm run operator -- --config /absolute/runtime/config.json takeover 123456
+npm run operator -- --config /absolute/runtime/config.json resume 123456
+```
+
+Takeover locks before staff reply. Resume allows future incoming messages; it does
+not replay pending/draft jobs. Review history before giving back to the bot.
+
+## Ambiguous send
+
+If delivery status is unknown, inspect the actual Messenger conversation. Do not
+automatically retry: Meta may have accepted the first request before a timeout.
+
+```bash
+npm run operator -- --config /absolute/runtime/config.json reconcile JOB_UUID sent
+# OR, only after verifying it did NOT send:
+npm run operator -- --config /absolute/runtime/config.json reconcile JOB_UUID not-sent
+```
+
+Reconcile only records the observed outcome, never resends. Then resume explicitly.
+During recovery in-flight agent jobs are interrupted and queued jobs for those
+conversations are canceled. Unrelated pending jobs remain queued.
+
+## Troubleshooting
+
+- 503 webhook: plugin not ready, env/config invalid, DB unavailable, or service stopped.
+- 403 webhook: signature invalid or GET verify token mismatch; do not disable checks.
+- No draft: wrong Page subscription, app test permissions, HUMAN/WAITING state, model
+  unavailable, empty KB, or request rejected. Inspect doctor/status, not raw secrets.
+- All replies handoff: model runtime may not support tool-free `complete`, or the
+  configured model is not returning schema-valid JSON. Prove with a test Page.
+- Env error: file mode 600, outside workspace, required keys set, service user can read.
+- Lock exists: check PID and runtime owner; don't remove a live runtime's lock.
+- Port collision: change adminPort then reload; do not kill unknown listeners.
+- Page token mismatch in live: configure the correct Page token, never relax probe.
+
+API accepted/sent is not evidence the customer read it. Delivery/read receipts are
+ignored in v0.1; UI must not claim delivered/read.

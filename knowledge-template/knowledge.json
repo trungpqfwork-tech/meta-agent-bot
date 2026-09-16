@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "documents": [
+    {
+      "id": "example-faq",
+      "title": "Mẫu FAQ — thay nội dung trước khi dùng",
+      "keywords": ["giờ mở cửa", "mấy giờ"],
+      "content": "DỮ LIỆU MẪU: chưa có giờ mở cửa đã được xác nhận.",
+      "approved": false,
+      "validUntil": null
+    }
+  ]
+}

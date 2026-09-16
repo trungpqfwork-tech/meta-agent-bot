@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.tgz
+coverage/
+runtime/
+config.local.json
+config.json
+*.backup*
