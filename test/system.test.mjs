@@ -16,7 +16,7 @@ import { startAdmin } from '../src/admin.mjs';
 
 function fixture(t,mode='draft') {
   const dir=mkdtempSync(join(tmpdir(),'page-cskh-test-'));
-  const c={...JSON.parse(readFileSync(new URL('../config.example.json',import.meta.url))),pageId:'100',appId:'200',model:'provider/model',mode,workspace:join(dir,'agent'),envFile:join(dir,'.env'),database:join(dir,'data/state.sqlite'),knowledgeFile:join(dir,'knowledge.json')};
+  const c={...JSON.parse(readFileSync(new URL('../config.example.json',import.meta.url))),pageId:'100',appId:'200',model:'provider/model',mode,workspace:join(dir,'agent'),envFile:join(dir,'.env'),database:join(dir,'data/state.sqlite'),knowledgeFile:join(dir,'knowledge.json'),messageDebounceSeconds:0};
   mkdirSync(c.workspace);
   const secrets={META_APP_SECRET:'s'.repeat(32),META_PAGE_ACCESS_TOKEN:'p'.repeat(32),META_WEBHOOK_VERIFY_TOKEN:'v'.repeat(32),CSKH_ADMIN_TOKEN:'a'.repeat(40)};
   writeFileSync(c.envFile,Object.entries(secrets).map(([k,v])=>`${k}=${v}`).join('\n'),{mode:0o600});
@@ -31,6 +31,18 @@ function completion(message=answer) {return async ({system})=>system.includes('b
 test('dedup webhook batch and stable customer ownership',t=>{
   const {s}=fixture(t);assert.equal(s.ingest([inbound(),inbound()]),1);assert.equal(s.ingest([inbound()]),0);
   assert.equal(s.next().psid,'111');assert.equal(s.next(),null);
+});
+test('message debounce folds rapid customer messages into one delayed job',t=>{
+  const {s,c}=fixture(t);c.messageDebounceSeconds=2;
+  assert.equal(s.ingest([inbound('111','a','xin chào')],c),1);
+  assert.equal(s.next(),null);
+  assert.equal(s.ingest([inbound('111','b','mình muốn hỏi giá')],c),1);
+  assert.equal(s.snapshot().jobs.filter(j=>j.status==='pending').length,1);
+  assert.equal(s.snapshot().jobs.filter(j=>j.status==='superseded').length,1);
+  assert.equal(s.next(Date.now()+1999),null);
+  const j=s.next(Date.now()+2001);
+  assert.equal(j.psid,'111');
+  assert.equal(j.text,'xin chào\nmình muốn hỏi giá');
 });
 test('normalization rejects wrong Page and forged route',()=>{
   const payload={object:'page',entry:[{id:'100',messaging:[{sender:{id:'111'},recipient:{id:'999'},timestamp:Date.now(),message:{mid:'m1',text:'hi'}}]}]};
@@ -127,9 +139,10 @@ test('env is private and not injected into process environment',t=>{
 });
 test('runtime env overrides mode and handoff controls',t=>{
   const {c,secrets}=fixture(t);
-  const runtime=applyEnvOverrides(c,{...secrets,PAGE_CSKH_MODE:'live',PAGE_CSKH_WAITING_RESET_SECONDS:'12',PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false'});
+  const runtime=applyEnvOverrides(c,{...secrets,PAGE_CSKH_MODE:'live',PAGE_CSKH_WAITING_RESET_SECONDS:'12',PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'3',PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false'});
   assert.equal(runtime.mode,'live');
   assert.equal(runtime.waitingResetSeconds,12);
+  assert.equal(runtime.messageDebounceSeconds,3);
   assert.equal(runtime.enableHumanHandoff,false);
 });
 test('runtime config can be generated from private env',t=>{
@@ -142,6 +155,7 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_PUBLIC_WEBHOOK_URL:'https://example.com/webhooks/page-cskh',
     PAGE_CSKH_MODEL:'provider/model',
     PAGE_CSKH_EDGE_PORT:'19992',
+    PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'4',
     PAGE_CSKH_MODE:'live',
     PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',
     PAGE_CSKH_SCOPE_KEYWORDS:'a,b,c'
@@ -151,6 +165,7 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.pageId,'123');
   assert.equal(loaded.mode,'live');
   assert.equal(loaded.edgePort,19992);
+  assert.equal(loaded.messageDebounceSeconds,4);
   assert.equal(loaded.enableHumanHandoff,false);
   assert.deepEqual(loaded.scopeKeywords,['a','b','c']);
 });

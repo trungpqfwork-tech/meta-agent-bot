@@ -15,6 +15,7 @@ export function loadConfig(file) {
   assert(/^v\d+\.\d+$/.test(c.graphVersion), 'Invalid graphVersion');
   assert(['draft','live'].includes(c.mode), 'mode must be draft or live');
   c.waitingResetSeconds ??= 0;
+  c.messageDebounceSeconds ??= 2;
   c.enableHumanHandoff ??= true;
   assert(/^\/webhooks\/[a-z0-9/-]+$/.test(c.webhookPath), 'Invalid webhookPath');
   const u = new URL(c.publicWebhookUrl);
@@ -25,6 +26,7 @@ export function loadConfig(file) {
   assert(c.edgePort !== c.adminPort, 'edgePort must differ from adminPort');
   for (const k of ['maxDailyAgentCalls','maxCustomerCallsPerHour','agentTimeoutMs']) assert(Number.isInteger(c[k]) && c[k] > 0, `Invalid ${k}`);
   assert(Number.isInteger(c.waitingResetSeconds) && c.waitingResetSeconds >= 0, 'Invalid waitingResetSeconds');
+  assert(Number.isInteger(c.messageDebounceSeconds) && c.messageDebounceSeconds >= 0 && c.messageDebounceSeconds <= 60, 'Invalid messageDebounceSeconds');
   assert(typeof c.enableHumanHandoff === 'boolean', 'Invalid enableHumanHandoff');
   assert(c.agentTimeoutMs <= 120000, 'agentTimeoutMs must be <= 120000');
   assert(Array.isArray(c.scopeKeywords) && c.scopeKeywords.length && c.scopeKeywords.every(x => typeof x === 'string' && x.trim()), 'scopeKeywords required');
@@ -91,6 +93,7 @@ export function runtimeConfigFromEnv(env) {
     edgePort: envInt(env, 'PAGE_CSKH_EDGE_PORT', 18892),
     mode,
     waitingResetSeconds: envInt(env, 'PAGE_CSKH_WAITING_RESET_SECONDS', 0),
+    messageDebounceSeconds: envInt(env, 'PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS', 2),
     enableHumanHandoff,
     scopeDescription: envText(env, 'PAGE_CSKH_SCOPE_DESCRIPTION', 'Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.'),
     scopeKeywords: envCsv(env, 'PAGE_CSKH_SCOPE_KEYWORDS', 'đặt hàng,giá,sản phẩm,chính sách'),
@@ -113,6 +116,11 @@ export function applyEnvOverrides(config, env) {
     const n = Number(env.PAGE_CSKH_WAITING_RESET_SECONDS);
     assert(Number.isInteger(n) && n >= 0, 'PAGE_CSKH_WAITING_RESET_SECONDS must be an integer >= 0');
     c.waitingResetSeconds = n;
+  }
+  if (env.PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS) {
+    const n = Number(env.PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS);
+    assert(Number.isInteger(n) && n >= 0 && n <= 60, 'PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS must be an integer from 0..60');
+    c.messageDebounceSeconds = n;
   }
   if (env.PAGE_CSKH_ENABLE_HUMAN_HANDOFF) {
     c.enableHumanHandoff = parseBool(env.PAGE_CSKH_ENABLE_HUMAN_HANDOFF.toLowerCase(), 'PAGE_CSKH_ENABLE_HUMAN_HANDOFF');

@@ -17,6 +17,7 @@
     "edgePort": "PAGE_CSKH_EDGE_PORT",
     "mode": "PAGE_CSKH_MODE",
     "waitingResetSeconds": "PAGE_CSKH_WAITING_RESET_SECONDS",
+    "messageDebounceSeconds": "PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS",
     "enableHumanHandoff": "PAGE_CSKH_ENABLE_HUMAN_HANDOFF",
     "scopeDescription": "PAGE_CSKH_SCOPE_DESCRIPTION",
     "scopeKeywords": "PAGE_CSKH_SCOPE_KEYWORDS",
@@ -35,7 +36,8 @@
     "adminPort": ["1025..65535"],
     "edgePort": ["1025..65535", "must differ from adminPort"],
     "agentTimeoutMs": ["1..120000"],
-    "waitingResetSeconds": ["0 disables", "positive integer seconds"]
+    "waitingResetSeconds": ["0 disables", "positive integer seconds"],
+    "messageDebounceSeconds": ["0 disables", "integer seconds from 0..60"]
   },
   "schemaVersion": 1,
   "pageId": "REPLACE_PAGE_ID",
@@ -54,6 +56,7 @@
   "edgePort": 18892,
   "mode": "draft",
   "waitingResetSeconds": 0,
+  "messageDebounceSeconds": 2,
   "enableHumanHandoff": true,
   "scopeDescription": "Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.",
   "scopeKeywords": ["đặt hàng", "giá", "sản phẩm", "chính sách"],

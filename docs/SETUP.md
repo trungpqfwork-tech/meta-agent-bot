@@ -59,6 +59,9 @@ Runtime behavior is controlled from `.env`: `PAGE_CSKH_MODE=draft|live` selects
 draft or real sends at service start. Set
 `PAGE_CSKH_WAITING_RESET_SECONDS` to a positive integer to automatically move
 `WAITING` conversations back to `BOT` after that many seconds. Set
+`PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS` to a positive integer to wait for a quiet
+period before creating a model/reply job, so rapid multi-message customer input
+is folded into one bot reply. Set it to `0` to disable debounce. Set
 `PAGE_CSKH_ENABLE_HUMAN_HANDOFF=false` in test environments when the agent should
 keep bot ownership instead of actually parking a conversation in `WAITING` after
 a handoff decision.

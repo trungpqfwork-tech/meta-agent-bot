@@ -76,9 +76,10 @@ export class Store {
       return rows.length;
     });
   }
-  ingest(events) {
+  ingest(events, config={}) {
     return this.tx(()=> {
       let accepted=0;
+      const debounceMs=Math.max(0,Math.trunc(config.messageDebounceSeconds??0)*1000);
       for (const e of events) {
         const id = `${this.pageId}:${e.id}`;
         if(this.db.prepare('SELECT 1 FROM events WHERE id=?').get(id)) continue;
@@ -94,16 +95,22 @@ export class Store {
         this.db.prepare('UPDATE conversations SET last_customer=MAX(last_customer,?) WHERE psid=?').run(Math.min(e.at,Date.now()),e.psid);
         const c=this.conversation(e.psid);
         if(c.state!=='BOT') continue;
+        let text=e.text;
+        const pending=this.db.prepare("SELECT * FROM jobs WHERE psid=? AND status='pending' ORDER BY created,rowid").all(e.psid);
+        if(pending.length) {
+          text=[...pending.map(j=>j.text),e.text].filter(Boolean).join('\n');
+          this.db.prepare("UPDATE jobs SET status='superseded',reason=? WHERE psid=? AND status='pending'").run('message_debounce_superseded',e.psid);
+        }
         const job=randomUUID();
-        this.db.prepare('INSERT INTO jobs(id,event_id,psid,text,status,version,created) VALUES (?,?,?,?,?,?,?)').run(job,id,e.psid,e.text,'pending',c.version,Date.now());
+        this.db.prepare('INSERT INTO jobs(id,event_id,psid,text,status,version,created) VALUES (?,?,?,?,?,?,?)').run(job,id,e.psid,text,'pending',c.version,Date.now()+debounceMs);
         accepted++;
       }
       return accepted;
     });
   }
-  next() {
+  next(now=Date.now()) {
     return this.tx(()=> {
-      const j=this.db.prepare("SELECT * FROM jobs WHERE status='pending' ORDER BY created,rowid LIMIT 1").get();
+      const j=this.db.prepare("SELECT * FROM jobs WHERE status='pending' AND created<=? ORDER BY created,rowid LIMIT 1").get(now);
       if(!j) return null;
       this.db.prepare("UPDATE jobs SET status='processing' WHERE id=?").run(j.id);
       return {...j,status:'processing'};

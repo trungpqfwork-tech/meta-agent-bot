@@ -24,6 +24,9 @@ Runtime `.env` controls:
 - `PAGE_CSKH_MODE=draft|live`: overrides config mode at Gateway service start.
 - `PAGE_CSKH_WAITING_RESET_SECONDS=0`: `0` disables auto reset; a positive number
   moves `WAITING` conversations back to `BOT` after that many seconds.
+- `PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS=2`: `0` disables debounce; a positive
+  number waits for that many quiet seconds and folds rapid customer messages
+  into one job/reply.
 - `PAGE_CSKH_ENABLE_HUMAN_HANDOFF=true|false`: when `false`, model handoff
   decisions are logged and answered with the clarify text, but the conversation
   stays in `BOT` for test-heavy runs.

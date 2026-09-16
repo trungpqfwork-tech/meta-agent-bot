@@ -58,7 +58,7 @@ export function makeWebhook(config,secrets,store) {
       let events;
       try { events=normalizeEvents(JSON.parse(raw.toString('utf8')),config.pageId); }
       catch(e) {log(logFile,`POST invalid_payload len=${raw.length} err=${e.message}`);res.statusCode=400;res.end('invalid payload');return true;}
-      store.ingest(events);
+      store.ingest(events,config);
       log(logFile,`POST ingested len=${raw.length} ${summarizeEvents(events)}`);
       res.statusCode=200;res.end('EVENT_RECEIVED');
     } catch(e) {log(logFile,`POST err=${e.message}`);res.statusCode=e.message==='body_limit'?413:503;res.end('unavailable');}
