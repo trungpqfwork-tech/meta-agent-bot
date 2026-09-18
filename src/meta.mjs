@@ -4,7 +4,14 @@ export function metaClient(config,secrets,fetcher=fetch) {
   return {
     async probe() {
       const r=await fetcher(`${base}/me?fields=id`,{headers,signal:AbortSignal.timeout(10000)});
-      if(!r.ok) throw new Error('Meta token probe failed');
+      if(!r.ok) {
+        const appToken=`${config.appId}|${secrets.META_APP_SECRET}`;
+        const d=await fetcher(`${base.replace(/\/v\d+\.\d+$/,'')}/debug_token?input_token=${encodeURIComponent(secrets.META_PAGE_ACCESS_TOKEN)}&access_token=${encodeURIComponent(appToken)}`,{signal:AbortSignal.timeout(10000)});
+        if(!d.ok) throw new Error('Meta token probe failed');
+        const data=(await d.json()).data;
+        if(data?.is_valid!==true || data?.type!=='PAGE' || data?.profile_id!==config.pageId) throw new Error('Page token does not match configured Page');
+        return true;
+      }
       const j=await r.json(); if(j.id!==config.pageId) throw new Error('Page token does not match configured Page');
       return true;
     },

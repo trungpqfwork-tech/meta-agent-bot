@@ -106,6 +106,9 @@ for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
   }
   mkdirSync(dirname(loaded.knowledgeFile), {recursive:true, mode:0o700});
   if(!existsSync(loaded.knowledgeFile)) copyFileSync(resolve(projectRoot, 'knowledge-template/knowledge.json'), loaded.knowledgeFile);
+  mkdirSync(loaded.imageDir, {recursive:true, mode:0o700});
+  mkdirSync(dirname(loaded.imageCatalogFile), {recursive:true, mode:0o700});
+  if(!existsSync(loaded.imageCatalogFile)) copyFileSync(resolve(projectRoot, 'image-template/catalog.json'), loaded.imageCatalogFile);
 
   const summary = {status:'generated', runtimeDir, configFile, edgeFile, ecosystemFile, edgePort:loaded.edgePort, webhookPath:loaded.webhookPath, mode:loaded.mode};
   if(has('--apply')) {

@@ -31,7 +31,9 @@ export function loadConfig(file) {
   assert(c.agentTimeoutMs <= 120000, 'agentTimeoutMs must be <= 120000');
   assert(Array.isArray(c.scopeKeywords) && c.scopeKeywords.length && c.scopeKeywords.every(x => typeof x === 'string' && x.trim()), 'scopeKeywords required');
   for (const k of ['pageName','scopeDescription','handoffText','outOfScopeText','clarifyText']) assert(typeof c[k] === 'string' && c[k].trim().length > 0 && c[k].length <= 3000, `Invalid ${k}`);
-  for (const k of ['envFile','database','workspace','knowledgeFile']) {
+  c.imageDir ??= './images';
+  c.imageCatalogFile ??= './images/catalog.json';
+  for (const k of ['envFile','database','workspace','knowledgeFile','imageDir','imageCatalogFile']) {
     assert(typeof c[k] === 'string' && c[k], `${k} required`);
     c[k] = resolve(dirname(resolve(file)), c[k]);
   }
@@ -87,6 +89,8 @@ export function runtimeConfigFromEnv(env) {
     database,
     workspace: envOptionalText(env, 'PAGE_CSKH_WORKSPACE', './agent'),
     knowledgeFile: envOptionalText(env, 'PAGE_CSKH_KNOWLEDGE_FILE', './knowledge.json'),
+    imageDir: envOptionalText(env, 'PAGE_CSKH_IMAGE_DIR', './images'),
+    imageCatalogFile: envOptionalText(env, 'PAGE_CSKH_IMAGE_CATALOG_FILE', './images/catalog.json'),
     webhookPath,
     publicWebhookUrl: envText(env, 'PAGE_CSKH_PUBLIC_WEBHOOK_URL'),
     adminPort: envInt(env, 'PAGE_CSKH_ADMIN_PORT', 18891),

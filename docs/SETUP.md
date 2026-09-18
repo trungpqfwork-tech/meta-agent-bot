@@ -37,7 +37,7 @@ npm run generate-config -- --env /absolute/runtime/.env --out /absolute/runtime/
 
 For clean deployments, prefer the full runtime generator. It creates generated
 `config.json`, `edge.json`, PM2 runner/ecosystem files, agent workspace
-templates and the starter knowledge file from `.env`:
+templates, the starter knowledge file and the image catalog folder from `.env`:
 
 ```bash
 npm run deploy-runtime -- --env /absolute/runtime/.env
@@ -53,7 +53,8 @@ npm run deploy-runtime -- --env /absolute/runtime/.env \
 `config.example.json` documents the generated JSON shape, source env var names
 and enum-style allowed values. Review the supported Graph API version in your
 Meta dashboard; `v25.0` is an example, not an evergreen guarantee. Relative
-env/database/workspace/knowledge paths resolve from the generated config file.
+env/database/workspace/knowledge/image paths resolve from the generated config
+file.
 
 Runtime behavior is controlled from `.env`: `PAGE_CSKH_MODE=draft|live` selects
 draft or real sends at service start. Set
@@ -154,6 +155,31 @@ content, `approved:true`, and optionally an ISO validUntil timestamp.
 MVP retrieval is accent-insensitive keyword matching; supply synonyms. It is not
 a vector database. Unsupported/expired information causes clarification/handoff.
 Knowledge reloads each job; config/env changes need service restart/reload.
+For owner-supplied Excel product updates, follow `docs/PRODUCT-UPDATES.md`.
+
+Product image metadata lives outside the source tree in the runtime image catalog:
+
+```bash
+PAGE_CSKH_IMAGE_DIR=./images
+PAGE_CSKH_IMAGE_CATALOG_FILE=./images/catalog.json
+```
+
+Put image files under `images/` and add approved catalog entries:
+
+```json
+{
+  "id": "buffalo-tenderloin-67",
+  "title": "Thăn trâu 67",
+  "keywords": ["thăn trâu", "trâu 67", "trâu"],
+  "caption": "Ảnh sản phẩm thăn trâu 67.",
+  "file": "buffalo-tenderloin-67.jpg",
+  "approved": true
+}
+```
+
+The current worker sends text only. It passes matching approved image metadata to
+the agent so the answer can say whether an image is available. A later send-image
+action can use the same catalog.
 
 Run ACCEPTANCE.md. Only then set `PAGE_CSKH_MODE=live` with the owner's
 authorization and restart/reload the plugin. Old drafts are NEVER auto-sent when

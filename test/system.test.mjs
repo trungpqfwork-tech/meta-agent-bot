@@ -10,7 +10,8 @@ import { Worker,openClawCompletion } from '../src/worker.mjs';
 import { makeWebhook,normalizeEvents } from '../src/webhook.mjs';
 import { applyEnvOverrides,loadConfig,loadSecrets,runtimeConfigFromEnv } from '../src/config.mjs';
 import { metaClient } from '../src/meta.mjs';
-import { retrieve,validateAnswer } from '../src/knowledge.mjs';
+import { parseModelJson,retrieve,validateAnswer } from '../src/knowledge.mjs';
+import { retrieveImages } from '../src/images.mjs';
 import { makePatch } from '../scripts/setup.mjs';
 import { startAdmin } from '../src/admin.mjs';
 
@@ -34,13 +35,15 @@ test('dedup webhook batch and stable customer ownership',t=>{
 });
 test('message debounce folds rapid customer messages into one delayed job',t=>{
   const {s,c}=fixture(t);c.messageDebounceSeconds=2;
-  assert.equal(s.ingest([inbound('111','a','xin chào')],c),1);
+  const base=1700000000000;
+  assert.equal(s.ingest([inbound('111','a','xin chào',base)],c),1);
   assert.equal(s.next(),null);
-  assert.equal(s.ingest([inbound('111','b','mình muốn hỏi giá')],c),1);
+  assert.equal(s.ingest([inbound('111','b','mình muốn hỏi giá',base+500)],c),1);
   assert.equal(s.snapshot().jobs.filter(j=>j.status==='pending').length,1);
   assert.equal(s.snapshot().jobs.filter(j=>j.status==='superseded').length,1);
-  assert.equal(s.next(Date.now()+1999),null);
-  const j=s.next(Date.now()+2001);
+  const created=s.snapshot().jobs.find(j=>j.status==='pending').created;
+  assert.equal(s.next(created-1),null);
+  const j=s.next(created);
   assert.equal(j.psid,'111');
   assert.equal(j.text,'xin chào\nmình muốn hỏi giá');
 });
@@ -67,6 +70,16 @@ test('takeover while model running cancels late output',async t=>{
   const w=new Worker(c,s,async()=>{await gate;return answer;},{send:async()=>{sent++;return 'x';}});
   const pending=w.process(s.next());s.takeover('111');release();await pending;
   assert.equal(sent,0);assert.equal(s.conversation('111').state,'HUMAN');assert.equal(s.snapshot().jobs[0].status,'cancelled');
+});
+test('new customer message while model is running cancels stale reply',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','a','hi',1000)]);let release;const gate=new Promise(r=>release=r);let sent=0;
+  const w=new Worker(c,s,async p=>{if(p.system.includes('bộ kiểm tra'))return '{"inScope":true,"supported":true}';await gate;return JSON.stringify({action:'social',text:'hello',sourceIds:[],reason:''});},{send:async()=>{sent++;return 'x';}});
+  const pending=w.process(s.next());
+  s.ingest([inbound('111','b','toi can hoi tro',2000)],c);
+  release();await pending;
+  assert.equal(sent,0);
+  assert.equal(s.snapshot().jobs.find(j=>j.event_id==='100:a').status,'cancelled');
+  assert.equal(s.next().text,'toi can hoi tro');
 });
 test('draft makes zero network sends',async t=>{
   const {s,c}=fixture(t);s.ingest([inbound()]);let sent=0;
@@ -121,12 +134,37 @@ test('invalid citations and failed semantic review hand off',async t=>{
   s.ingest([inbound()]);await new Worker(c,s,async p=>p.system.includes('bộ kiểm tra')?'{"inScope":false,"supported":false}':answer,{}).process(s.next());
   assert.equal(s.conversation('111').state,'WAITING');
 });
+test('model JSON parser tolerates fenced or prefixed JSON output',()=>{
+  assert.equal(parseModelJson('```json\n{"ok":true}\n```').ok,true);
+  assert.equal(parseModelJson('Dạ đây là JSON:\\n{"ok":true}').ok,true);
+});
 test('out-of-scope model prose never sent verbatim',async t=>{
   const {s,c}=fixture(t,'live');s.ingest([inbound()]);let text;
   await new Worker(c,s,completion('{"action":"out_of_scope","text":"unsafe general answer","sourceIds":[]}'),{send:async(_,v)=>{text=v;return 'out';}}).process(s.next());assert.equal(text,c.outOfScopeText);
 });
 test('expired/unapproved knowledge excluded',t=>{
   const {c}=fixture(t);const docs=JSON.parse(readFileSync(c.knowledgeFile)).documents;docs[0].validUntil='2000-01-01';writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:docs}));assert.deepEqual(retrieve(c.knowledgeFile,'giờ'),[]);
+});
+test('generic customer questions still receive bounded catalog context',t=>{
+  const {c}=fixture(t);
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[
+    {id:'beef',title:'Sản phẩm bò',keywords:['ba chỉ bò'],content:'Ba chỉ bò dùng lẩu, nướng.',approved:true,validUntil:null},
+    {id:'usage',title:'Công dụng sản phẩm',keywords:['sản phẩm'],content:'Tư vấn theo nhu cầu sử dụng.',approved:true,validUntil:null},
+    {id:'buffalo',title:'Sản phẩm trâu',keywords:['nạc dăm trâu'],content:'Nạc dăm trâu, thăn trâu, đuôi trâu.',approved:true,validUntil:null}
+  ]}));
+  const docs=retrieve(c.knowledgeFile,'bên mình có sản phẩm gì?');
+  assert.deepEqual(docs.map(d=>d.id),['usage','beef','buffalo']);
+});
+test('image catalog retrieves approved matching product images',t=>{
+  const {dir}=fixture(t);
+  const file=join(dir,'images.json');
+  writeFileSync(file,JSON.stringify({schemaVersion:1,images:[
+    {id:'buffalo',title:'Thăn trâu 67',keywords:['thăn trâu','trâu'],caption:'Ảnh thăn trâu 67',file:'buffalo.jpg',approved:true},
+    {id:'draft',title:'Ảnh nháp',keywords:['trâu'],file:'draft.jpg',approved:false}
+  ]}));
+  const images=retrieveImages(file,'trâu có ảnh không');
+  assert.equal(images.length,1);
+  assert.equal(images[0].id,'buffalo');
 });
 test('budget exhaustion hands off without model call',async t=>{
   const {s,c}=fixture(t);c.maxDailyAgentCalls=0;s.ingest([inbound()]);let calls=0;
@@ -155,6 +193,8 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_PUBLIC_WEBHOOK_URL:'https://example.com/webhooks/page-cskh',
     PAGE_CSKH_MODEL:'provider/model',
     PAGE_CSKH_EDGE_PORT:'19992',
+    PAGE_CSKH_IMAGE_DIR:'./product-images',
+    PAGE_CSKH_IMAGE_CATALOG_FILE:'./product-images/catalog.json',
     PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'4',
     PAGE_CSKH_MODE:'live',
     PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',
@@ -165,6 +205,8 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.pageId,'123');
   assert.equal(loaded.mode,'live');
   assert.equal(loaded.edgePort,19992);
+  assert.ok(loaded.imageDir.endsWith('/product-images'));
+  assert.ok(loaded.imageCatalogFile.endsWith('/product-images/catalog.json'));
   assert.equal(loaded.messageDebounceSeconds,4);
   assert.equal(loaded.enableHumanHandoff,false);
   assert.deepEqual(loaded.scopeKeywords,['a','b','c']);
@@ -185,6 +227,15 @@ test('Meta refuses token/Page mismatch; exact recipient captured in request',asy
   await assert.rejects(()=>metaClient(c,sec,async()=>({ok:true,json:async()=>({id:'999'})})).probe(),/does not match/);
   const client=metaClient(c,sec,async(url,opts)=>{captured=JSON.parse(opts.body);return {ok:true,json:async()=>({recipient_id:'111',message_id:'m1'})};});
   assert.equal(await client.send('111','hi'),'m1');assert.equal(captured.recipient.id,'111');
+});
+test('Meta probe accepts valid Page token when metadata endpoint lacks permission',async()=>{
+  const c={graphVersion:'v25.0',pageId:'100',appId:'200'},sec={META_PAGE_ACCESS_TOKEN:'test',META_APP_SECRET:'secret'};
+  const client=metaClient(c,sec,async url=>{
+    if(String(url).includes('/me?')) return {ok:false,json:async()=>({error:{code:100}})};
+    assert.ok(String(url).includes('/debug_token?'));
+    return {ok:true,json:async()=>({data:{is_valid:true,type:'PAGE',profile_id:'100'}})};
+  });
+  assert.equal(await client.probe(),true);
 });
 test('HTTP webhook: valid challenge, signed batch, rejection and retry dedup',async t=>{
   const {s,c,secrets}=fixture(t);const server=createServer(makeWebhook(c,secrets,s));await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));

@@ -19,6 +19,9 @@ Then restart/reload the component that reads the changed file. Secrets and confi
 are read at start. KB is read fresh per job. Gateway restarts preserve DB and
 human ownership.
 
+For Excel-driven product updates, use `docs/PRODUCT-UPDATES.md`. It defines how
+to map spreadsheet columns into runtime KB and image catalog files.
+
 Runtime `.env` controls:
 
 - `PAGE_CSKH_MODE=draft|live`: overrides config mode at Gateway service start.
@@ -33,6 +36,11 @@ Runtime `.env` controls:
 - `PAGE_CSKH_EDGE_PORT=18892`: local loopback port for the PM2 webhook edge.
   Public HTTPS must proxy the webhook path to this port, never to admin or the
   full Gateway.
+- `PAGE_CSKH_IMAGE_DIR=./images` and
+  `PAGE_CSKH_IMAGE_CATALOG_FILE=./images/catalog.json`: runtime product image
+  storage and metadata. Edit the catalog to add/remove image availability; it is
+  read per job like KB. Moving the path needs config regeneration and Gateway
+  restart.
 
 ## Webhook PM2 edge
 

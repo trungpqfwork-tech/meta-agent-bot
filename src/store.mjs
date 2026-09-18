@@ -117,6 +117,11 @@ export class Store {
     });
   }
   allowed(j) { const c=this.conversation(j.psid); return c?.state==='BOT' && c.version===j.version; }
+  hasNewerCustomerMessage(j) {
+    const current=this.db.prepare('SELECT at FROM events WHERE id=? AND psid=? AND kind=?').get(j.event_id,j.psid,'customer');
+    if(!current) return false;
+    return !!this.db.prepare("SELECT 1 FROM events WHERE psid=? AND kind='customer' AND at>? AND id<>? LIMIT 1").get(j.psid,current.at,j.event_id);
+  }
   finish(id,status,reason='') { this.db.prepare('UPDATE jobs SET status=?,reason=? WHERE id=?').run(status,reason,id); }
   history(psid) { return this.db.prepare("SELECT kind,text,at FROM events WHERE psid=? AND kind!='bot_echo' ORDER BY at DESC,rowid DESC LIMIT 16").all(psid).reverse(); }
   reserveCall(j,c) {

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "images": [
+    {
+      "id": "sample-beef-belly",
+      "title": "Ảnh mẫu ba chỉ bò",
+      "keywords": ["ba chỉ bò", "ba chỉ", "lẩu", "nướng"],
+      "caption": "Ảnh sản phẩm ba chỉ bò dùng để tư vấn khách.",
+      "file": "beef-belly.jpg",
+      "approved": false
+    }
+  ]
+}
