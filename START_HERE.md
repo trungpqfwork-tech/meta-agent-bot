@@ -10,7 +10,7 @@ KB riêng, `.env` riêng. Không sửa core OpenClaw. Mặc định `draft` (kh�
 
 1. Đọc `README.md`, `docs/SETUP.md`, `docs/SECURITY.md` và `docs/ACCEPTANCE.md`.
 2. Chạy `node --version`, `openclaw --version`, `npm run check`, `npm test`.
-   Host mục tiêu được ghim ở 2026.9.4; không tự bỏ qua kiểm tra tương thích.
+   Nếu host khác môi trường đã test, chạy smoke/acceptance trước khi bật live.
 3. Tạo thư mục runtime **ngoài repository và ngoài mọi workspace agent công khai**.
    Copy `config.example.json` vào đó. Cấu hình Page ID, App ID, domain, model,
    phạm vi, đường dẫn; giữ `mode: draft`. Các đường dẫn tương đối tính từ config.

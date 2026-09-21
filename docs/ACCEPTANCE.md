@@ -9,7 +9,7 @@ Mock models and Meta do not constitute real model/Meta proof.
 
 ## Isolated host install
 
-Run `npm run smoke:install` on Linux with OpenClaw 2026.9.4 and `tar` available.
+Run `npm run smoke:install` on Linux with the target OpenClaw host and `tar` available.
 It packs/extracts the project, sets up twice in a new temp state directory, proves
 existing-agent/KB preservation, runs an actual isolated Gateway and a local mock
 OpenAI-compatible model, signs an inbound event, verifies scoped draft output and

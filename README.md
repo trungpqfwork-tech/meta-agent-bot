@@ -34,7 +34,7 @@ flowchart LR
  Guard --> Send[Meta Send API]
 ```
 
-No extra npm runtime dependency: uses Node 24 built-ins (including node:sqlite).
+No extra npm runtime dependency: uses Node built-ins including `node:sqlite`.
 SDK import is resolved by the OpenClaw plugin loader. No build transpilation is
 required because distributable runtime source is native ESM JavaScript (`.mjs`).
 
@@ -46,8 +46,8 @@ npm test
 npm pack
 ```
 
-Runtime requires OpenClaw **2026.9.4**; the SDK is experimental. Other versions
-require compatibility proof, not just relaxing a version string.
+OpenClaw compatibility should be proved on the target host with setup, smoke and
+acceptance checks before enabling live sends.
 
 ## Important boundaries
 
