@@ -156,6 +156,8 @@ MVP retrieval is accent-insensitive keyword matching; supply synonyms. It is not
 a vector database. Unsupported/expired information causes clarification/handoff.
 Knowledge reloads each job; config/env changes need service restart/reload.
 For owner-supplied Excel product updates, follow `docs/PRODUCT-UPDATES.md`.
+The repo includes `scripts/import-products.mjs` for preview/apply imports and
+`skills/page-cskh-product-import/SKILL.md` for OpenClaw/Telegram agents.
 
 Product image metadata lives outside the source tree in the runtime image catalog:
 

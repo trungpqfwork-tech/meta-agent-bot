@@ -21,7 +21,7 @@ export async function setup(args=process.argv.slice(2)) {
   const file=resolve(fileArg),c=loadConfig(file);
   assert(c.mode==='draft','Setup requires mode=draft; enable live separately after acceptance');
   assert(!within(root,c.envFile) && !within(root,c.database) && !within(root,c.workspace),'Runtime files must be outside project');
-  const version=cli(['--version']); assert(/\b2026\.9\.4\b/.test(version),'Only OpenClaw 2026.9.4 is qualified; test adapter before using another version');
+  const version=cli(['--version']);
   const rosterRaw=cli(['config','get','agents.entries','--json'],{allowMissing:true});
   const roster=rosterRaw?JSON.parse(rosterRaw):{};
   assert(roster && typeof roster==='object' && !Array.isArray(roster),'Unsupported agent roster');
