@@ -2,7 +2,7 @@
 
 ## 1. Preconditions
 
-- Node >=24.16, qualified OpenClaw 2026.9.4; npm; reachable Gateway.
+- Node.js, npm and a reachable OpenClaw Gateway.
 - A model provider already configured on the destination OpenClaw. Configure any
   missing credentials through OpenClaw's masked terminal flow, not chat.
 - Meta app with Messenger, Page access, appropriate permissions and app access
