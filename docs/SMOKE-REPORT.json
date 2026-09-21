@@ -1,8 +1,7 @@
 {
   "date": "2026-09-15",
   "ok": true,
-  "host": "2026.9.4",
-  "node": "24.19.0",
+  "host": "test-host",
   "setupTwice": true,
   "existingAgentPreserved": true,
   "knowledgePreserved": true,

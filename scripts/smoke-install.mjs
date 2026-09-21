@@ -72,7 +72,7 @@ try {
   assert.equal((await fetch(admin+'/status')).status,401);
   assert.equal((await fetch(admin+'/takeover',{method:'POST',headers,body:JSON.stringify({psid:'111'})})).status,200);
   assert.equal((await status()).conversations[0].state,'HUMAN');
-  const report={ok:true,host:'2026.9.4',artifact:packed.filename,setupTwice:true,existingAgentPreserved:true,kbPreserved:true,pluginLoaded:true,signedWebhook:true,dedup:true,toolFreeRuntimeWithMockProvider:true,modelCalls,draftRecipient:'111',takeover:true,realMeta:false,realModel:false};
+  const report={ok:true,host:'target-host',artifact:packed.filename,setupTwice:true,existingAgentPreserved:true,kbPreserved:true,pluginLoaded:true,signedWebhook:true,dedup:true,toolFreeRuntimeWithMockProvider:true,modelCalls,draftRecipient:'111',takeover:true,realMeta:false,realModel:false};
   writeFileSync(join(base,'report.json'),JSON.stringify(report,null,2),{mode:0o600});console.log(JSON.stringify({...report,evidenceDirectory:base},null,2));
 }catch(e){console.error(e.message);process.exitCode=1;}
 finally {
