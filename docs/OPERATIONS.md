@@ -20,7 +20,10 @@ are read at start. KB is read fresh per job. Gateway restarts preserve DB and
 human ownership.
 
 For Excel-driven product updates, use `docs/PRODUCT-UPDATES.md`. It defines how
-to map spreadsheet columns into runtime KB and image catalog files.
+to map spreadsheet columns into runtime product, KB, and image catalog files.
+Automated imports should use `npm run import-products -- --preview` first and
+only run `--apply` after owner approval. Agent-facing instructions live in
+`skills/page-cskh-product-import/SKILL.md`.
 
 Runtime `.env` controls:
 
@@ -95,6 +98,25 @@ npm run operator -- --config /absolute/runtime/config.json resume 123456
 
 Takeover locks before staff reply. Resume allows future incoming messages; it does
 not replay pending/draft jobs. Review history before giving back to the bot.
+
+## Order intake
+
+The bot can collect order details while continuing normal CSKH conversation. Order
+state is persisted in the runtime SQLite database, table `orders`, keyed by PSID.
+Each order tracks:
+
+- `customer_type`: `store` or `personal`
+- `customer_name`
+- `phone`
+- `address`
+- `products`: JSON array of requested products/quantities/needs
+- `status`: `collecting` until all required fields are present, then `ready`
+
+The model writes the customer-facing text; code only extracts/stores structured
+fields. If a customer wants to order, the bot should first identify whether they
+are a store/business buyer or a personal buyer, then ask naturally for missing
+fields. A ready order is not sent to external systems in v0.1; later workflows can
+read `orders` and process rows with `status='ready'`.
 
 ## Ambiguous send
 

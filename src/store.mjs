@@ -26,6 +26,7 @@ export class Store {
         CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,psid TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,event_id TEXT UNIQUE,psid TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,created INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '');
         CREATE TABLE IF NOT EXISTS outbox(job_id TEXT PRIMARY KEY,psid TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,mid TEXT,source_ids TEXT NOT NULL DEFAULT '[]');
+        CREATE TABLE IF NOT EXISTS orders(psid TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'collecting',customer_type TEXT NOT NULL DEFAULT '',customer_name TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',products TEXT NOT NULL DEFAULT '[]',fb_name TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',raw TEXT NOT NULL DEFAULT '{}',created INTEGER NOT NULL,updated INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,psid TEXT,action TEXT NOT NULL,at INTEGER NOT NULL,detail TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,psid TEXT NOT NULL,at INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS events_conversation ON events(psid,at);
@@ -124,6 +125,53 @@ export class Store {
   }
   finish(id,status,reason='') { this.db.prepare('UPDATE jobs SET status=?,reason=? WHERE id=?').run(status,reason,id); }
   history(psid) { return this.db.prepare("SELECT kind,text,at FROM events WHERE psid=? AND kind!='bot_echo' ORDER BY at DESC,rowid DESC LIMIT 16").all(psid).reverse(); }
+  order(psid) {
+    const o=this.db.prepare('SELECT * FROM orders WHERE psid=?').get(psid);
+    if(!o) return null;
+    let products=[];
+    try { products=JSON.parse(o.products); } catch {}
+    let raw={};
+    try { raw=JSON.parse(o.raw); } catch {}
+    return {...o,products,raw,missing:this.orderMissing(o)};
+  }
+  orderMissing(o) {
+    const products=Array.isArray(o.products) ? o.products : (()=>{try{return JSON.parse(o.products)}catch{return []}})();
+    return [
+      ['customerType',o.customer_type],
+      ['customerName',o.customer_name],
+      ['phone',o.phone],
+      ['address',o.address],
+      ['products',products.length ? 'yes' : '']
+    ].filter(([,v])=>!String(v??'').trim()).map(([k])=>k);
+  }
+  saveOrder(psid,patch={}) {
+    const now=Date.now(), current=this.order(psid);
+    const clean=s=>String(s??'').trim().slice(0,500);
+    const customerType=['store','personal'].includes(patch.customerType) ? patch.customerType : '';
+    const incomingProducts=Array.isArray(patch.products) ? patch.products.map(clean).filter(Boolean).slice(0,20) : [];
+    const oldProducts=current?.products ?? [];
+    const products=[...oldProducts];
+    for(const p of incomingProducts) if(!products.some(x=>x.toLowerCase()===p.toLowerCase())) products.push(p);
+    const merged={
+      customer_type: customerType || current?.customer_type || '',
+      customer_name: clean(patch.customerName) || current?.customer_name || '',
+      phone: clean(patch.phone) || current?.phone || '',
+      address: clean(patch.address) || current?.address || '',
+      products,
+      fb_name: clean(patch.fbName) || current?.fb_name || '',
+      notes: [current?.notes,clean(patch.notes)].filter(Boolean).join('\n').slice(0,1000),
+      raw: {...(current?.raw??{}),lastPatch:patch}
+    };
+    const missing=this.orderMissing({...merged,products:merged.products});
+    const status=missing.length ? 'collecting' : 'ready';
+    this.db.prepare(`
+      INSERT INTO orders(psid,status,customer_type,customer_name,phone,address,products,fb_name,notes,raw,created,updated)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(psid) DO UPDATE SET status=excluded.status,customer_type=excluded.customer_type,customer_name=excluded.customer_name,phone=excluded.phone,address=excluded.address,products=excluded.products,fb_name=excluded.fb_name,notes=excluded.notes,raw=excluded.raw,updated=excluded.updated
+    `).run(psid,status,merged.customer_type,merged.customer_name,merged.phone,merged.address,JSON.stringify(merged.products),merged.fb_name,merged.notes,JSON.stringify(merged.raw),current?.created??now,now);
+    this.audit(psid,status==='ready'?'order_ready':'order_update',JSON.stringify({missing,products:merged.products}).slice(0,1000));
+    return this.order(psid);
+  }
   reserveCall(j,c) {
     const now=Date.now(), day=now-now%86400000;
     const total=this.db.prepare('SELECT COUNT(*) AS n FROM calls WHERE at>=?').get(day).n;
@@ -152,6 +200,7 @@ export class Store {
   snapshot() {
     return { pageId:this.pageId, conversations:this.db.prepare('SELECT * FROM conversations ORDER BY last_customer DESC LIMIT 200').all(),
       jobs:this.db.prepare('SELECT j.*,o.text AS reply,o.status AS delivery,o.mid,o.source_ids FROM jobs j LEFT JOIN outbox o ON o.job_id=j.id ORDER BY j.created DESC LIMIT 100').all(),
+      orders:this.db.prepare('SELECT * FROM orders ORDER BY updated DESC LIMIT 100').all(),
       audit:this.db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 100').all() };
   }
   close() { this.db.close(); unlinkSync(this.lock); }

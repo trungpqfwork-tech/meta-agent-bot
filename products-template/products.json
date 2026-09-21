@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "products": [
+    {
+      "id": "sample-beef-belly",
+      "name": "Ba chỉ bò mẫu",
+      "category": "bò",
+      "origins": ["Canada", "Úc"],
+      "brands": [
+        {
+          "name": "Excel",
+          "traits": ["mỡ trắng", "mỡ nhiều hơn nạc"],
+          "bestFor": ["lẩu", "nướng", "khách thích béo"]
+        }
+      ],
+      "useCases": ["lẩu", "nướng"],
+      "notes": ["Dữ liệu mẫu, chưa dùng để tư vấn khách."],
+      "keywords": ["ba chỉ bò mẫu", "lẩu", "nướng"],
+      "images": [],
+      "approved": false
+    }
+  ]
+}

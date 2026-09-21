@@ -10,6 +10,7 @@
     "check": "node scripts/check.mjs",
     "generate-config": "node scripts/generate-config.mjs",
     "deploy-runtime": "node scripts/deploy-runtime.mjs",
+    "import-products": "node scripts/import-products.mjs",
     "setup": "node scripts/setup.mjs",
     "doctor": "node scripts/doctor.mjs",
     "verify": "node scripts/verify.mjs",
@@ -17,7 +18,7 @@
     "smoke:install": "node scripts/smoke-install.mjs",
     "prepack": "npm run check && npm test"
   },
-  "files": ["src", "scripts", "docs", "agent-template", "knowledge-template", "test", "START_HERE.md", "AGENTS.md", "README.md", "config.example.json", ".env.example", "openclaw.plugin.json"],
+  "files": ["src", "scripts", "docs", "agent-template", "knowledge-template", "image-template", "products-template", "skills", "test", "START_HERE.md", "AGENTS.md", "README.md", "config.example.json", ".env.example", "openclaw.plugin.json"],
   "openclaw": {
     "extensions": ["./src/index.mjs"],
     "compat": { "minGatewayVersion": "2026.9.4" },

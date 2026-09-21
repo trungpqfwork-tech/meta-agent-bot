@@ -106,6 +106,8 @@ for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
   }
   mkdirSync(dirname(loaded.knowledgeFile), {recursive:true, mode:0o700});
   if(!existsSync(loaded.knowledgeFile)) copyFileSync(resolve(projectRoot, 'knowledge-template/knowledge.json'), loaded.knowledgeFile);
+  const productsFile = resolve(runtimeDir, 'products.json');
+  if(!existsSync(productsFile)) copyFileSync(resolve(projectRoot, 'products-template/products.json'), productsFile);
   mkdirSync(loaded.imageDir, {recursive:true, mode:0o700});
   mkdirSync(dirname(loaded.imageCatalogFile), {recursive:true, mode:0o700});
   if(!existsSync(loaded.imageCatalogFile)) copyFileSync(resolve(projectRoot, 'image-template/catalog.json'), loaded.imageCatalogFile);

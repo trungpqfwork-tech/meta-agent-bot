@@ -14,6 +14,7 @@ import { parseModelJson,retrieve,validateAnswer } from '../src/knowledge.mjs';
 import { retrieveImages } from '../src/images.mjs';
 import { makePatch } from '../scripts/setup.mjs';
 import { startAdmin } from '../src/admin.mjs';
+import { buildImportPlan } from '../scripts/import-products.mjs';
 
 function fixture(t,mode='draft') {
   const dir=mkdtempSync(join(tmpdir(),'page-cskh-test-'));
@@ -98,6 +99,76 @@ test('disabled human handoff keeps bot ownership for testing',async t=>{
   await w.process(s.next());s.ingest([inbound('111','m2')]);
   assert.equal(sent,1);assert.equal(s.conversation('111').state,'BOT');assert.equal(s.next().text,'mấy giờ?');
 });
+test('suppressed handoff lets AI compose scoped fallback instead of generic clarify',async t=>{
+  const {s,c}=fixture(t,'live');c.enableHumanHandoff=false;s.ingest([inbound('111','chem','chân gà có ngâm hóa chất k')]);let text='';
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) return '{"text":"Dạ hiện dữ liệu em có chưa xác nhận thông tin ngâm hóa chất cho chân gà ạ. Anh/chị cho em xin đúng loại chân gà để nhân viên kiểm tra lại giúp nhé."}';
+    return '{"action":"handoff","text":"","sourceIds":[],"reason":"missing_safety_data"}';
+  },{send:async(_,v)=>{text=v;return 'out1';}});
+  await w.process(s.next());
+  assert.match(text,/ngâm hóa chất|chân gà|chưa xác nhận|nhân viên/);
+  assert.notEqual(text,c.clarifyText);
+});
+test('generic clarify is rewritten by scoped AI fallback',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','chem','chân gà có ngâm hóa chất k')]);let text='',fallbackCalls=0;
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) {fallbackCalls++; return '{"text":"Dạ hiện dữ liệu em có chưa xác nhận vấn đề hóa chất của chân gà ạ. Em cần nhân viên kiểm tra thông tin này cho anh/chị."}';}
+    return JSON.stringify({action:'clarify',text:c.clarifyText,sourceIds:[],reason:'missing_safety_data'});
+  },{send:async(_,v)=>{text=v;return 'out1';}});
+  await w.process(s.next());
+  assert.equal(fallbackCalls,1);
+  assert.match(text,/hóa chất|chân gà|nhân viên/);
+  assert.notEqual(text,c.clarifyText);
+});
+test('awkward ordering handoff prose is rewritten when customer did not ask to order',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','catalog','bên mình có sản phẩm gì?')]);let text='',fallbackCalls=0;
+  const awkward='Anh/chị muốn tìm hiểu hoặc đặt nhóm nào ạ? Em chưa có thông tin về nhóm bò và quy trình đặt hàng chi tiết, cần chuyển nhân viên hỗ trợ thêm khi anh/chị chốt nhóm nhé.';
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) {fallbackCalls++; return '{"text":"Dạ bên em có các nhóm bò, heo, trâu, gà và cá hồi ạ. Anh/chị đang muốn dùng để lẩu, nướng hay lấy theo nhóm nào để em tư vấn sát hơn?"}';}
+    return JSON.stringify({action:'clarify',text:awkward,sourceIds:[],reason:'broad_catalog_question'});
+  },{send:async(_,v)=>{text=v;return 'out1';}});
+  await w.process(s.next());
+  assert.equal(fallbackCalls,1);
+  assert.match(text,/bò|heo|trâu|gà|cá hồi/);
+  assert.doesNotMatch(text,/quy trình đặt hàng|chốt nhóm|chuyển nhân viên/);
+});
+test('order intake extracts and persists required customer fields',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','order','em đặt 2kg ba chỉ bò, tên Nam, sdt 0912345678, giao 12 Láng Hạ, mua cá nhân')]);let text='';
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:'personal',customerName:'Nam',phone:'0912345678',address:'12 Láng Hạ',products:['2kg ba chỉ bò'],notes:null,ready:true});
+    if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
+    const payload=JSON.parse(p.message);
+    assert.equal(payload.order.status,'ready');
+    return JSON.stringify({action:'reply',text:'Dạ em đã ghi nhận đơn 2kg ba chỉ bò cho anh Nam, giao tới 12 Láng Hạ. Em sẽ chuyển xử lý bước tiếp theo ạ.',sourceIds:['hours'],reason:'order_ready'});
+  },{send:async(_,v)=>{text=v;return 'out';}});
+  await w.process(s.next());
+  const order=s.order('111');
+  assert.equal(order.status,'ready');
+  assert.equal(order.customer_type,'personal');
+  assert.equal(order.customer_name,'Nam');
+  assert.equal(order.phone,'0912345678');
+  assert.equal(order.address,'12 Láng Hạ');
+  assert.deepEqual(order.products,['2kg ba chỉ bò']);
+  assert.match(text,/ghi nhận đơn|ba chỉ bò|Nam/);
+});
+test('collecting order continues extracting later customer details',async t=>{
+  const {s,c}=fixture(t,'live');s.saveOrder('111',{wantsOrder:true,products:['chân gà rút xương']});
+  s.ingest([inbound('111','details','mình là cửa hàng, tên Hạnh, số 0900000000, địa chỉ 5 Nguyễn Trãi')]);let text='';
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:'store',customerName:'Hạnh',phone:'0900000000',address:'5 Nguyễn Trãi',products:[],notes:null,ready:true});
+    if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
+    const payload=JSON.parse(p.message);
+    assert.equal(payload.order.customerType,'store');
+    assert.equal(payload.order.status,'ready');
+    return JSON.stringify({action:'reply',text:'Dạ em đã đủ thông tin lên đơn chân gà rút xương cho cửa hàng mình rồi ạ.',sourceIds:['hours'],reason:'order_ready'});
+  },{send:async(_,v)=>{text=v;return 'out';}});
+  await w.process(s.next());
+  const order=s.order('111');
+  assert.equal(order.status,'ready');
+  assert.equal(order.customer_type,'store');
+  assert.deepEqual(order.products,['chân gà rút xương']);
+  assert.match(text,/đủ thông tin|lên đơn/);
+});
 test('WAITING auto reset returns conversation to BOT after env-controlled timeout',t=>{
   const {s}=fixture(t);s.ingest([inbound()]);s.hold('111','WAITING','missing');
   assert.equal(s.autoResumeExpiredWaiting(3600),0);
@@ -138,9 +209,22 @@ test('model JSON parser tolerates fenced or prefixed JSON output',()=>{
   assert.equal(parseModelJson('```json\n{"ok":true}\n```').ok,true);
   assert.equal(parseModelJson('Dạ đây là JSON:\\n{"ok":true}').ok,true);
 });
-test('out-of-scope model prose never sent verbatim',async t=>{
-  const {s,c}=fixture(t,'live');s.ingest([inbound()]);let text;
-  await new Worker(c,s,completion('{"action":"out_of_scope","text":"unsafe general answer","sourceIds":[]}'),{send:async(_,v)=>{text=v;return 'out';}}).process(s.next());assert.equal(text,c.outOfScopeText);
+test('out-of-scope uses AI wording instead of fixed env prose',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','x','bên mình có tuyển nhân viên không')]);let text;
+  await new Worker(c,s,completion('{"action":"out_of_scope","text":"Dạ hiện em chưa hỗ trợ thông tin tuyển dụng ở đây ạ. Em có thể tư vấn sản phẩm và dịch vụ của Page nếu anh/chị cần.","sourceIds":[]}'),{send:async(_,v)=>{text=v;return 'out';}}).process(s.next());
+  assert.match(text,/tuyển dụng|sản phẩm|dịch vụ/);
+  assert.notEqual(text,c.outOfScopeText);
+});
+test('generic out-of-scope env prose is rewritten by AI fallback',async t=>{
+  const {s,c}=fixture(t,'live');s.ingest([inbound('111','chem','chân gà có ngâm hóa chất k')]);let text='',fallbackCalls=0;
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) {fallbackCalls++; return '{"text":"Dạ câu này liên quan đến an toàn sản phẩm nên em không muốn trả lời thiếu căn cứ ạ. Hiện dữ liệu em có chưa xác nhận thông tin ngâm hóa chất cho chân gà; em cần nhân viên kiểm tra chính xác giúp anh/chị."}';}
+    return JSON.stringify({action:'out_of_scope',text:c.outOfScopeText,sourceIds:[],reason:'missing_safety_data'});
+  },{send:async(_,v)=>{text=v;return 'out';}});
+  await w.process(s.next());
+  assert.equal(fallbackCalls,1);
+  assert.match(text,/an toàn|hóa chất|chân gà|kiểm tra/);
+  assert.notEqual(text,c.outOfScopeText);
 });
 test('expired/unapproved knowledge excluded',t=>{
   const {c}=fixture(t);const docs=JSON.parse(readFileSync(c.knowledgeFile)).documents;docs[0].validUntil='2000-01-01';writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:docs}));assert.deepEqual(retrieve(c.knowledgeFile,'giờ'),[]);
@@ -165,6 +249,28 @@ test('image catalog retrieves approved matching product images',t=>{
   const images=retrieveImages(file,'trâu có ảnh không');
   assert.equal(images.length,1);
   assert.equal(images[0].id,'buffalo');
+});
+test('product import preview builds product, knowledge, and image catalogs',async t=>{
+  const {dir}=fixture(t);
+  const runtime=join(dir,'runtime');
+  mkdirSync(runtime,{recursive:true});
+  writeFileSync(join(runtime,'knowledge.json'),JSON.stringify({schemaVersion:1,documents:[{id:'page-info',title:'Page info',keywords:['page'],content:'Page info',approved:true,validUntil:null}]}));
+  mkdirSync(join(runtime,'images'),{recursive:true});
+  writeFileSync(join(runtime,'images/catalog.json'),JSON.stringify({schemaVersion:1,images:[]}));
+  const input=join(dir,'products.json');
+  writeFileSync(input,JSON.stringify({products:[{
+    'Tên sản phẩm':'Chân gà rút xương',
+    'Xuất xứ':'Việt Nam',
+    'Công dụng':'nộm, ăn vặt',
+    'Ảnh':'chan-ga.jpg'
+  }]}));
+  const plan=await buildImportPlan({file:input,runtimeDir:runtime});
+  assert.equal(plan.summary.added.length,1);
+  assert.equal(plan.products.products[0].name,'Chân gà rút xương');
+  assert.ok(plan.knowledge.documents.some(d=>d.id==='product-chan-ga-rut-xuong'));
+  assert.ok(plan.knowledge.documents.some(d=>d.id==='category-ga'));
+  assert.equal(plan.images.images[0].file,'chan-ga.jpg');
+  assert.ok(plan.knowledge.documents.some(d=>d.id==='page-info'));
 });
 test('budget exhaustion hands off without model call',async t=>{
   const {s,c}=fixture(t);c.maxDailyAgentCalls=0;s.ingest([inbound()]);let calls=0;

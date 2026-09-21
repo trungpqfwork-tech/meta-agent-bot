@@ -7,6 +7,7 @@ knowledge base from an Excel file supplied by the owner.
 
 Convert owner-supplied product data into runtime files the bot can read:
 
+- `/home/trungpq/.openclaw/page-cskh-runtime/products.json`
 - `/home/trungpq/.openclaw/page-cskh-runtime/knowledge.json`
 - `/home/trungpq/.openclaw/page-cskh-runtime/images/catalog.json`
 - image files under `/home/trungpq/.openclaw/page-cskh-runtime/images/`
@@ -89,14 +90,46 @@ future action and must use this catalog.
 
 ## Update Procedure
 
+Preferred command flow:
+
+```bash
+cd /home/trungpq/.openclaw/workspace/projects/page-cskh
+npm run import-products -- \
+  --file /absolute/path/to/products.xlsx \
+  --runtime /home/trungpq/.openclaw/page-cskh-runtime \
+  --preview
+```
+
+Only after owner approval:
+
+```bash
+npm run import-products -- \
+  --file /absolute/path/to/products.xlsx \
+  --runtime /home/trungpq/.openclaw/page-cskh-runtime \
+  --apply
+```
+
+The script writes `products.json`, merges product documents into
+`knowledge.json`, updates `images/catalog.json`, and backs up existing runtime
+files before applying.
+
+For `.xlsx` files, the VPS needs Python `openpyxl`:
+
+```bash
+python3 -m pip install --user openpyxl
+```
+
+CSV and normalized JSON imports do not require `openpyxl`.
+
 1. Save the original Excel file under a runtime import folder, for example:
 
 ```bash
 mkdir -p /home/trungpq/.openclaw/page-cskh-runtime/imports
 ```
 
-2. Parse the Excel file with a real spreadsheet parser. Do not rely on ad-hoc
-string splitting.
+2. Parse the Excel file with `npm run import-products`. Do not rely on ad-hoc
+string splitting. If the Excel layout is too messy for direct preview, use AI to
+normalize the sheet into temporary JSON first, then run the script on that JSON.
 
 3. Backup current runtime files before writing:
 
