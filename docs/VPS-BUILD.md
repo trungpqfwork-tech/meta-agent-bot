@@ -123,6 +123,60 @@ cloudflared tunnel --url http://127.0.0.1:<edgePort>
 
 Cập nhật webhook URL trong Meta App theo hostname mới (quick tunnel đổi mỗi lần chạy).
 
+## 10. Agent admin (tùy chọn — để vận hành từ Telegram)
+
+Agent admin là con chạy trên máy để làm việc vận hành (cập nhật KB, sửa hành vi,
+xử lý hội thoại kẹt, đọc log, deploy). Nó **phải tách** khỏi con bot trả lời
+khách: bot CSKH bị người lạ chọc qua webhook nên không được có tool, còn agent
+admin chỉ nghe từ Telegram user id của chủ Page.
+
+```bash
+scripts/setup-admin-agent.sh --check     # xem còn thiếu gì
+scripts/setup-admin-agent.sh             # tạo profile cskh-admin + trust repo
+```
+
+Nếu anh **chỉ chat được với Hermes trên VPS** và không SSH vào terminal, hãy gửi
+cho Hermes trên VPS đúng yêu cầu này sau khi code đã nằm ở `/srv/page-cskh/app`:
+
+```text
+Hãy chạy bootstrap admin agent cho page-cskh:
+cd /srv/page-cskh/app
+bash scripts/setup-admin-agent.sh
+bash scripts/setup-admin-agent.sh --check
+Gửi lại nguyên văn kết quả check, không in secret.
+```
+
+Điều kiện: con Hermes mà anh đang chat trên VPS phải là agent có tool terminal và
+đủ quyền ghi vào `$HOME/.hermes/profiles`. Script không cần input bí mật và có
+thể chạy qua chat. Nếu VPS chưa có Hermes/gateway nào để anh chat được thì không
+có tiến trình nào tự chạy được script này — lúc đó cần bước bootstrap ngoài
+Hermes (SSH/systemd/cloud-init/Ansible) để cài Hermes lần đầu.
+
+Script tạo profile (`--clone` để có sẵn provider + key, **không** copy token
+messaging), chạy `hermes skills trust <repo>` để `.agents/skills/` được load, set
+`terminal.cwd` tuyệt đối về repo, và in ra các bước còn lại. Các bước đó là thủ
+công vì liên quan secrets:
+
+- pair bot Telegram cho profile: `hermes gateway setup` (hoặc dashboard →
+  Messaging → Telegram → Create with QR)
+- đặt `TELEGRAM_ALLOWED_USERS` = user id Telegram (dạng số) của chủ Page
+- **dùng bot khác** với bot cảnh báo trong `runtime/.env`; nếu dùng chung, gateway
+  sẽ poll chính bot đó và agent admin sẽ đọc/đáp cả trong group cảnh báo
+
+Chạy agent từ thư mục repo để `AGENTS.md` + skill có hiệu lực. **Bắt buộc**:
+`terminal.cwd` của profile phải là đường dẫn **tuyệt đối** tới repo — mặc định `.`
+sẽ resolve về Hermes home và khi đó `AGENTS.md` + skill trong repo **im lặng
+không load** (không có lỗi, chỉ là agent không biết quy trình). Script đã set và
+`--check` kiểm tra lại.
+
+```bash
+cd /srv/page-cskh/app && HERMES_HOME=$HOME/.hermes/profiles/cskh-admin hermes
+```
+
+Quy trình vận hành nằm trong `.agents/skills/page-cskh-admin/SKILL.md` (đi theo
+git nên VPS tự có). Bộ nhớ/session của agent admin **không** đi theo git và không
+bao giờ được lẫn sang câu trả lời cho khách.
+
 ## Quy tắc không được vi phạm
 
 - **Một sender live cho một Page.** Trước khi cho instance mới nhận traffic, phải stop instance cũ.
