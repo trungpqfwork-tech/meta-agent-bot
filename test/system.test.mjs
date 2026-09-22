@@ -170,6 +170,59 @@ test('ready order notification is not sent twice',async t=>{
   assert.equal(count,0);
   assert.ok(s.order('111').notified_at > 0);
 });
+test('handoff alerts the consultant on Telegram and holds the conversation',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','hand','chân gà có ngâm hóa chất k')]);
+  const alerts=[];
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(s.next());
+  assert.equal(alerts.length,1);
+  assert.equal(alerts[0].psid,'111');
+  assert.equal(alerts[0].reason,'missing_safety_data');
+  assert.deepEqual(alerts[0].messages,['chân gà có ngâm hóa chất k']);
+  assert.equal(s.conversation('111').state,'WAITING');
+});
+
+test('handoff alert is not repeated for a job that already alerted',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','hand2','chân gà có ngâm hóa chất k')]);
+  const job=s.next();
+  s.markHandoffNotified(job.psid,job.id);
+  const alerts=[];
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(job);
+  assert.equal(alerts.length,0);
+  assert.equal(s.conversation('111').state,'WAITING');
+});
+
+test('suppressed handoff does not alert the consultant',async t=>{
+  const {s,c}=fixture(t,'live');
+  c.enableHumanHandoff=false;
+  s.ingest([inbound('111','sup','chân gà có ngâm hóa chất k')]);
+  const alerts=[];
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) return '{"text":"Dạ dữ liệu em có chưa xác nhận vấn đề này, em xin phép kiểm tra lại ạ."}';
+    return JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'});
+  },{send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(s.next());
+  assert.equal(alerts.length,0);
+  assert.equal(s.conversation('111').state,'BOT');
+});
+
+test('a Telegram failure still hands the conversation to a human',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','failnotify','chân gà có ngâm hóa chất k')]);
+  let text='';
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async(_,v)=>{text=v;return 'out'}},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async()=>{throw new Error('Telegram notify failed for chat 111');}});
+  await w.process(s.next());
+  assert.equal(s.conversation('111').state,'WAITING');
+  assert.equal(text,c.handoffText);
+  assert.equal(s.handoffNotified(s.snapshot().jobs.at(-1).id),false);
+});
+
 test('collecting order continues extracting later customer details',async t=>{
   const {s,c}=fixture(t,'live');s.saveOrder('111',{wantsOrder:true,products:['chân gà rút xương']});
   s.ingest([inbound('111','details','mình là cửa hàng, tên Hạnh, số 0900000000, địa chỉ 5 Nguyễn Trãi')]);let text='';

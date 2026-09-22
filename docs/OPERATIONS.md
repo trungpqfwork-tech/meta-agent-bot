@@ -38,7 +38,11 @@ Runtime `.env` controls:
   stays in `BOT` for test-heavy runs.
 - `TELEGRAM_BOT_TOKEN` and `PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=["123","456"]`:
   when set, every order that reaches `status='ready'` is sent once to each
-  configured Telegram chat id. Leave the array empty to disable notifications.
+  configured Telegram chat id, and every handoff (conversation moved to
+  `WAITING` for a human) sends one alert with the customer's recent messages and
+  PSID. Alerts are deduplicated per job via the `handoff_notified` audit row, so
+  a retried job never pings the consultant twice. Leave the array empty to
+  disable both.
 - `PAGE_CSKH_EDGE_PORT=18892`: local loopback port for the PM2 webhook edge.
   Public HTTPS must proxy the webhook path to this port, never to admin or the
   full Gateway.

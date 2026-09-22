@@ -182,6 +182,14 @@ export class Store {
     this.audit(psid,'order_notified','telegram');
     return this.order(psid);
   }
+  // Handoff alerts are deduplicated per job: a retried job must not ping the
+  // consultant twice, while a later handoff in the same conversation still does.
+  handoffNotified(jobId) {
+    return Boolean(this.db.prepare("SELECT 1 FROM audit WHERE action='handoff_notified' AND detail=? LIMIT 1").get(String(jobId)));
+  }
+  markHandoffNotified(psid,jobId) {
+    this.audit(psid,'handoff_notified',String(jobId));
+  }
   reserveCall(j,c) {
     const now=Date.now(), day=now-now%86400000;
     const total=this.db.prepare('SELECT COUNT(*) AS n FROM calls WHERE at>=?').get(day).n;

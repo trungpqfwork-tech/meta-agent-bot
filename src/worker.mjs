@@ -102,6 +102,26 @@ export class Worker {
       log(this.logFile,`process order_notify_fail psid=${j.psid} error=${String(e?.message??e).slice(0,300)}`);
     }
   }
+  async notifyHandoff(j,answer,history) {
+    if(!this.orderNotifier?.enabled || typeof this.orderNotifier.notifyHandoff!=='function') return;
+    if(this.store.handoffNotified(j.id)) return;
+    const order=this.store.order(j.psid);
+    try {
+      const sent=await this.orderNotifier.notifyHandoff({
+        psid:j.psid,
+        reason:answer.reason ?? '',
+        customerName:order?.customer_name ?? null,
+        phone:order?.phone ?? null,
+        messages:(Array.isArray(history)?history:[]).filter(x=>x.kind==='customer').slice(-3).map(x=>x.text)
+      });
+      this.store.markHandoffNotified(j.psid,j.id);
+      log(this.logFile,`process handoff_notify psid=${j.psid} sent=${sent}`);
+    } catch(e) {
+      // The customer is already queued for a human; a Telegram outage must not
+      // undo the handoff, so log it and leave the job unmarked for a later try.
+      log(this.logFile,`process handoff_notify_fail psid=${j.psid} error=${String(e?.message??e).slice(0,300)}`);
+    }
+  }
   async responseText(j,payload,answer,envFallback) {
     const candidate=answer.text?.trim();
     if(!needsRewrite(candidate,payload.currentMessage,envFallback)) return candidate;
@@ -157,6 +177,7 @@ export class Worker {
         s.tx(()=>s.hold(j.psid,'WAITING',answer.reason));
         state='WAITING'; version=s.conversation(j.psid).version;
         text=c.handoffText;
+        await this.notifyHandoff(j,answer,payload.history);
       }
     } else if(answer.action==='out_of_scope') text=await this.responseText(j,payload,answer,c.outOfScopeText);
     else if(answer.action==='clarify') {
