@@ -12,6 +12,11 @@ function arg(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
+function args(name) {
+  const out = [];
+  process.argv.forEach((value, i) => { if(value === name && process.argv[i + 1]) out.push(process.argv[i + 1]); });
+  return out;
+}
 function has(name) { return process.argv.includes(name); }
 function uniq(values) {
   return [...new Set(values.flatMap(v => splitList(v)).map(v => v.trim()).filter(Boolean))];
@@ -51,12 +56,18 @@ function compactRow(row) {
   }
   return out;
 }
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 function keyOf(row, aliases) {
-  const keys = Object.keys(row);
-  const normalized = keys.map(k => [k, normalize(k)]);
+  const normalized = Object.keys(row).map(k => [k, normalize(k)]);
   for(const alias of aliases) {
     const needle = normalize(alias);
-    const hit = normalized.find(([,k]) => k === needle || k.includes(needle) || needle.includes(k));
+    if(!needle) continue;
+    // Whole-word matching only. Substring matching made the "Ảnh" alias match
+    // "Danh Mục" (d-anh-muc) and fabricated an approved image for every product.
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(needle)}($|[^a-z0-9])`);
+    const hit = normalized.find(([,k]) => pattern.test(k));
     if(hit) return hit[0];
   }
   return undefined;
@@ -65,28 +76,36 @@ function val(row, aliases) {
   const k = keyOf(row, aliases);
   return k ? row[k] : '';
 }
-function inferCategory(name, explicit='') {
+export function cleanupValue(value) {
+  return String(value ?? '').trim().replace(/[.,;:…\s]+$/, '').trim();
+}
+export function inferCategory(name, explicit='') {
   const text = normalize(`${explicit} ${name}`);
+  // Word-boundary style matching: bare substrings such as "ca" match inside "canh"
+  // and misclassify pork cuts as cá, so every animal term is anchored.
   if(/(^| )bo($| )|ba chi bo|bap bo|suon bo|gau bo|gu hoa|de suon/.test(text)) return 'bò';
   if(/trau/.test(text)) return 'trâu';
-  if(/ga|chan ga|toi ga/.test(text)) return 'gà';
-  if(/heo|lon|mong heo|tim heo|xuong ong heo|sun non heo|ba chi heo|nac vai/.test(text)) return 'heo';
-  if(/ca|hoi|salmon/.test(text)) return 'cá';
+  if(/(^| )ga($| )|chan ga|toi ga|ga nguyen/.test(text)) return 'gà';
+  if(/(^| )heo($| )|(^| )lon($| )|gio |khoanh gio|canh buom|mong |tim heo|xuong ong|sun non|nac vai/.test(text)) return 'heo';
+  if(/(^| )ca($| )|ca hoi|salmon/.test(text)) return 'cá';
   return explicit || '';
 }
 function productFromRow(row, meta={}) {
   const name = val(row, ['Tên sản phẩm','Danh mục','Sản phẩm','Mặt hàng','Tên hàng','Product','Name']);
   if(!name) return null;
-  const category = inferCategory(name, val(row, ['Nhóm','Category','Danh mục cha','Loại']));
-  const brand = val(row, ['Thương hiệu','Nhãn hiệu','Brand']);
+  // 'Danh mục' is the product column in the operator sheets, so an explicit group
+  // column must be unambiguous rather than matching it by substring.
+  const category = inferCategory(name, cleanupValue(val(row, ['Nhóm','Nhóm hàng','Loại','Category'])));
+  const brand = cleanupValue(val(row, ['Thương hiệu','Nhãn hiệu','Brand']));
   const traits = uniq([val(row, ['Đặc tính','Mô tả','Đặc điểm','Traits','Description'])]);
   const useCases = uniq([val(row, ['Công dụng','Món phù hợp','Ứng dụng','Dùng cho','Use case','Best for'])]);
-  const origins = uniq([val(row, ['Xuất xứ','Origin','Nguồn gốc'])]);
-  const notes = uniq([val(row, ['Ghi chú','Lưu ý','Note','Notes'])]);
+  const origins = uniq([val(row, ['Xuất xứ','Origin','Nguồn gốc'])]).map(cleanupValue).filter(Boolean);
+  const notes = uniq([val(row, ['Ghi chú','Lưu ý','Note','Notes'])]).map(cleanupValue).filter(Boolean);
+  const brandNames = uniq([brand]).map(cleanupValue).filter(Boolean);
   const keywords = uniq([
     name,
     category,
-    brand,
+    ...brandNames,
     val(row, ['Từ khóa','Keyword','Keywords']),
     ...useCases
   ]);
@@ -96,7 +115,7 @@ function productFromRow(row, meta={}) {
     name,
     category,
     origins,
-    brands: brand ? [{name:brand, traits, bestFor:useCases}] : [],
+    brands: brandNames.map(b => ({name:b, traits, bestFor:useCases})),
     useCases,
     notes,
     keywords,
@@ -136,12 +155,18 @@ function contentForProduct(p) {
   if(p.origins?.length) lines.push(`Xuất xứ: ${p.origins.join(', ')}`);
   if(p.brands?.length) {
     lines.push('Thương hiệu/biến thể:');
+    // Brands sourced from one sheet row share one description; group them so the
+    // document does not repeat the same paragraph per brand.
+    const grouped = new Map();
     for(const b of p.brands) {
       const details = [
         b.traits?.length ? `đặc tính ${b.traits.join(', ')}` : '',
         b.bestFor?.length ? `phù hợp ${b.bestFor.join(', ')}` : ''
       ].filter(Boolean).join('; ');
-      lines.push(`- ${b.name}${details ? `: ${details}` : ''}`);
+      grouped.set(details, [...(grouped.get(details) ?? []), b.name]);
+    }
+    for(const [details, names] of grouped) {
+      lines.push(`- ${names.join(', ')}${details ? `: ${details}` : ''}`);
     }
   }
   if(p.useCases?.length) lines.push(`Công dụng/món phù hợp: ${p.useCases.join(', ')}`);
@@ -217,53 +242,123 @@ async function loadRows(file) {
     throw new Error('JSON import file must be an array or contain products/rows');
   }
   if(ext === '.csv') return [{sheet:'csv', rows:parseCsv(readFileSync(file,'utf8'))}];
-  if(['.xlsx','.xls','.xlsm'].includes(ext)) {
+  if(['.xlsx','.xlsm'].includes(ext)) {
     const code = `
-import json, sys
-try:
-  import openpyxl
-except Exception:
-  print(json.dumps({"error":"openpyxl_missing"}))
-  sys.exit(3)
+import json, sys, zipfile, xml.etree.ElementTree as ET
+NS = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+RNS = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
+def col_index(ref):
+    n = 0
+    for ch in ref:
+        if ch.isalpha(): n = n * 26 + (ord(ch.upper()) - 64)
+        else: break
+    return n - 1
+def row_number(ref):
+    digits = ''.join(ch for ch in ref if ch.isdigit())
+    return int(digits) if digits else 0
 path = sys.argv[1]
-wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+z = zipfile.ZipFile(path)
+shared = []
+if 'xl/sharedStrings.xml' in z.namelist():
+    root = ET.fromstring(z.read('xl/sharedStrings.xml'))
+    for si in root.findall(NS + 'si'):
+        shared.append(''.join(t.text or '' for t in si.iter(NS + 't')))
+rels = {}
+if 'xl/_rels/workbook.xml.rels' in z.namelist():
+    rel_root = ET.fromstring(z.read('xl/_rels/workbook.xml.rels'))
+    for rel in rel_root:
+        rels[rel.get('Id')] = rel.get('Target') or ''
+wb = ET.fromstring(z.read('xl/workbook.xml'))
+sheets = []
+for index, sh in enumerate(wb.iter(NS + 'sheet'), start=1):
+    target = rels.get(sh.get(RNS + 'id')) or ('worksheets/sheet%d.xml' % index)
+    target = target.lstrip('/')
+    if not target.startswith('xl/'): target = 'xl/' + target
+    sheets.append((sh.get('name'), target))
 out = []
-for ws in wb.worksheets:
-  rows = [[("" if c is None else str(c)).strip() for c in row] for row in ws.iter_rows(values_only=True)]
-  rows = [r for r in rows if any(r)]
-  if not rows:
-    out.append({"sheet": ws.title, "rows": []})
-    continue
-  header_index = 0
-  for i, row in enumerate(rows[:20]):
-    filled = [c for c in row if c]
-    if len(filled) >= 2:
-      header_index = i
-      break
-  headers = rows[header_index]
-  records = []
-  for row in rows[header_index+1:]:
-    rec = {}
-    for i, h in enumerate(headers):
-      if h:
-        rec[h] = row[i] if i < len(row) else ""
-    if any(str(v).strip() for v in rec.values()):
-      records.append(rec)
-  out.append({"sheet": ws.title, "rows": records})
+for name, target in sheets:
+    if target not in z.namelist():
+        out.append({'sheet': name, 'rows': []})
+        continue
+    root = ET.fromstring(z.read(target))
+    grid = {}
+    max_col = -1
+    for row in root.iter(NS + 'row'):
+        for c in row.findall(NS + 'c'):
+            ref = c.get('r') or ''
+            kind = c.get('t')
+            v = c.find(NS + 'v')
+            inline = c.find(NS + 'is')
+            if kind == 's' and v is not None:
+                value = shared[int(v.text)]
+            elif kind == 'inlineStr' and inline is not None:
+                value = ''.join(x.text or '' for x in inline.iter(NS + 't'))
+            elif v is not None:
+                value = v.text or ''
+            else:
+                value = ''
+            r, ci = row_number(ref), col_index(ref)
+            if not r or ci < 0: continue
+            grid[(r, ci)] = str(value).strip()
+            if ci > max_col: max_col = ci
+    rows_raw = sorted(set(k[0] for k in grid))
+    # Header detection must run on raw cells: a merged title row (A3:G3) would
+    # otherwise expand into a fake full-width header row.
+    header_row = None
+    for r in rows_raw[:20]:
+        values = [grid.get((r, c), '') for c in range(0, max_col + 1)]
+        if len([v for v in values if v]) >= 2:
+            header_row = r
+            break
+    if header_row is None:
+        out.append({'sheet': name, 'rows': []})
+        continue
+    headers = [grid.get((header_row, c), '') for c in range(0, max_col + 1)]
+    # Excel keeps a merged value only in the top-left cell; copy it across the
+    # range below the header so continuation rows keep category/origin.
+    for m in root.iter(NS + 'mergeCell'):
+        ref = m.get('ref') or ''
+        if ':' not in ref: continue
+        a, b = ref.split(':', 1)
+        r1, c1 = row_number(a), col_index(a)
+        r2, c2 = row_number(b), col_index(b)
+        if r1 <= header_row: continue
+        value = grid.get((r1, c1), '')
+        if not value: continue
+        for r in range(r1, r2 + 1):
+            for c in range(c1, c2 + 1):
+                if not grid.get((r, c)): grid[(r, c)] = value
+    records = []
+    for r in sorted(set(k[0] for k in grid)):
+        if r <= header_row: continue
+        values = [grid.get((r, c), '') for c in range(0, max_col + 1)]
+        if not any(values): continue
+        rec = {}
+        for i, h in enumerate(headers):
+            if h: rec[h] = values[i] if i < len(values) else ""
+        if any(str(v).strip() for v in rec.values()):
+            records.append(rec)
+    out.append({'sheet': name, 'rows': records})
 print(json.dumps(out, ensure_ascii=False))
 `;
-    const r = spawnSync('python3', ['-c', code, file], {encoding:'utf8', maxBuffer:16*1024*1024});
-    if(r.status === 3) throw new Error('Excel import requires Python openpyxl. Install it on the VPS, e.g. python3 -m pip install --user openpyxl, or upload CSV/JSON.');
+    const r = spawnSync('python3', ['-c', code, file], {encoding:'utf8', maxBuffer:32*1024*1024});
     if(r.status !== 0) throw new Error(`Excel parser failed: ${r.stderr || r.stdout}`);
     return JSON.parse(r.stdout);
   }
   throw new Error(`Unsupported import file extension: ${ext}`);
 }
-export async function buildImportPlan({file, runtimeDir}) {
+export function selectSheets(rowsBySheet, only) {
+  const wanted = (only ?? []).map(s => normalize(String(s))).filter(Boolean);
+  if(!wanted.length) return rowsBySheet;
+  const picked = rowsBySheet.filter(s => wanted.includes(normalize(s.sheet)));
+  assert(picked.length, `No sheet matched --sheet ${only.join(', ')}. Sheets in file: ${rowsBySheet.map(s => s.sheet).join(', ')}`);
+  return picked;
+}
+export async function buildImportPlan({file, runtimeDir, sheets}) {
   const productsFile = resolve(runtimeDir, 'products.json');
   const knowledgeFile = resolve(runtimeDir, 'knowledge.json');
   const imageCatalogFile = resolve(runtimeDir, 'images/catalog.json');
-  const rowsBySheet = await loadRows(file);
+  const rowsBySheet = selectSheets(await loadRows(file), sheets);
   const incoming = [];
   for(const {sheet, rows} of rowsBySheet) {
     rows.map(compactRow).forEach((row,index) => {
@@ -339,7 +434,7 @@ function applyPlan(plan) {
 if(process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const file = resolve(arg('--file') ?? '');
-    assert(file && process.argv.includes('--file'), 'Usage: npm run import-products -- --file products.xlsx --runtime /runtime [--preview|--apply]');
+    assert(file && process.argv.includes('--file'), 'Usage: npm run import-products -- --file products.xlsx --runtime /runtime [--sheet "Tên sheet"] [--preview|--apply]');
     const runtimeArg = arg('--runtime');
     const envArg = arg('--env');
     let runtimeDir = runtimeArg ? resolve(runtimeArg) : '';
@@ -351,7 +446,7 @@ if(process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url
       if(runtimeDir.endsWith('/data')) runtimeDir = dirname(runtimeDir);
     }
     assert(runtimeDir, 'Provide --runtime /path/to/page-cskh-runtime or --env /path/to/.env');
-    const plan = await buildImportPlan({file, runtimeDir});
+    const plan = await buildImportPlan({file, runtimeDir, sheets:args('--sheet')});
     if(has('--json')) console.log(JSON.stringify(plan.summary, null, 2));
     else printPreview(plan);
     if(has('--apply')) {
