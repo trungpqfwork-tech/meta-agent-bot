@@ -7,5 +7,15 @@ node_modules/
 coverage/
 runtime/
 config.local.json
+config.local.*.json
+config.pm2-test.json
 config.json
 *.backup*
+# Runtime deployment data — templates live in *-template/ and are tracked instead.
+agent/
+logs/
+images/
+knowledge.json
+products.json
+*.bak-*
+*.pre-import-bak

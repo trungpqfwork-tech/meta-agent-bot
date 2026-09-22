@@ -22,6 +22,7 @@ try {
 META_PAGE_ACCESS_TOKEN=${JSON.stringify(page)}
 META_WEBHOOK_VERIFY_TOKEN=${randomBytes(24).toString('hex')}
 CSKH_ADMIN_TOKEN=${randomBytes(32).toString('hex')}
+TELEGRAM_BOT_TOKEN=
 
 PAGE_CSKH_PAGE_ID=
 PAGE_CSKH_APP_ID=
@@ -41,6 +42,7 @@ PAGE_CSKH_MODE=draft
 PAGE_CSKH_WAITING_RESET_SECONDS=0
 PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS=2
 PAGE_CSKH_ENABLE_HUMAN_HANDOFF=true
+PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=[]
 PAGE_CSKH_SCOPE_DESCRIPTION=Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.
 PAGE_CSKH_SCOPE_KEYWORDS=đặt hàng,giá,sản phẩm,chính sách
 PAGE_CSKH_HANDOFF_TEXT=Em chuyển nhân viên hỗ trợ tiếp nhé.

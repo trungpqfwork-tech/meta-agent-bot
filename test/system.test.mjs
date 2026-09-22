@@ -134,22 +134,41 @@ test('awkward ordering handoff prose is rewritten when customer did not ask to o
 });
 test('order intake extracts and persists required customer fields',async t=>{
   const {s,c}=fixture(t,'live');s.ingest([inbound('111','order','em đặt 2kg ba chỉ bò, tên Nam, sdt 0912345678, giao 12 Láng Hạ, mua cá nhân')]);let text='';
+  const notified=[];
   const w=new Worker(c,s,async p=>{
     if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:'personal',customerName:'Nam',phone:'0912345678',address:'12 Láng Hạ',products:['2kg ba chỉ bò'],notes:null,ready:true});
     if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
     const payload=JSON.parse(p.message);
     assert.equal(payload.order.status,'ready');
     return JSON.stringify({action:'reply',text:'Dạ em đã ghi nhận đơn 2kg ba chỉ bò cho anh Nam, giao tới 12 Láng Hạ. Em sẽ chuyển xử lý bước tiếp theo ạ.',sourceIds:['hours'],reason:'order_ready'});
-  },{send:async(_,v)=>{text=v;return 'out';}});
+  },{send:async(_,v)=>{text=v;return 'out';}},{enabled:true,notifyOrder:async order=>{notified.push(order);return 2;}});
   await w.process(s.next());
   const order=s.order('111');
   assert.equal(order.status,'ready');
+  assert.ok(order.notified_at > 0);
+  assert.equal(notified.length,1);
+  assert.equal(notified[0].psid,'111');
   assert.equal(order.customer_type,'personal');
   assert.equal(order.customer_name,'Nam');
   assert.equal(order.phone,'0912345678');
   assert.equal(order.address,'12 Láng Hạ');
   assert.deepEqual(order.products,['2kg ba chỉ bò']);
   assert.match(text,/ghi nhận đơn|ba chỉ bò|Nam/);
+});
+test('ready order notification is not sent twice',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.saveOrder('111',{wantsOrder:true,customerType:'personal',customerName:'Nam',phone:'0912345678',address:'12 Láng Hạ',products:['2kg ba chỉ bò']});
+  s.markOrderNotified('111');
+  s.ingest([inbound('111','again','em bổ sung ghi chú giao buổi sáng')]);
+  let count=0;
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:null,customerName:null,phone:null,address:null,products:[],notes:'giao buổi sáng',ready:true});
+    if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
+    return JSON.stringify({action:'reply',text:'Dạ em đã cập nhật ghi chú giao buổi sáng ạ.',sourceIds:['hours'],reason:'order_update'});
+  },{send:async()=> 'out'},{enabled:true,notifyOrder:async()=>{count++;return 1;}});
+  await w.process(s.next());
+  assert.equal(count,0);
+  assert.ok(s.order('111').notified_at > 0);
 });
 test('collecting order continues extracting later customer details',async t=>{
   const {s,c}=fixture(t,'live');s.saveOrder('111',{wantsOrder:true,products:['chân gà rút xương']});
@@ -301,6 +320,7 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_EDGE_PORT:'19992',
     PAGE_CSKH_IMAGE_DIR:'./product-images',
     PAGE_CSKH_IMAGE_CATALOG_FILE:'./product-images/catalog.json',
+    PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS:'["123","-100456"]',
     PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'4',
     PAGE_CSKH_MODE:'live',
     PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',
@@ -311,6 +331,7 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.pageId,'123');
   assert.equal(loaded.mode,'live');
   assert.equal(loaded.edgePort,19992);
+  assert.deepEqual(loaded.orderTelegramChatIds,['123','-100456']);
   assert.ok(loaded.imageDir.endsWith('/product-images'));
   assert.ok(loaded.imageCatalogFile.endsWith('/product-images/catalog.json'));
   assert.equal(loaded.messageDebounceSeconds,4);

@@ -26,12 +26,13 @@ export class Store {
         CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,psid TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,event_id TEXT UNIQUE,psid TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,created INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '');
         CREATE TABLE IF NOT EXISTS outbox(job_id TEXT PRIMARY KEY,psid TEXT NOT NULL,text TEXT NOT NULL,status TEXT NOT NULL,mid TEXT,source_ids TEXT NOT NULL DEFAULT '[]');
-        CREATE TABLE IF NOT EXISTS orders(psid TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'collecting',customer_type TEXT NOT NULL DEFAULT '',customer_name TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',products TEXT NOT NULL DEFAULT '[]',fb_name TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',raw TEXT NOT NULL DEFAULT '{}',created INTEGER NOT NULL,updated INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS orders(psid TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'collecting',customer_type TEXT NOT NULL DEFAULT '',customer_name TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',products TEXT NOT NULL DEFAULT '[]',fb_name TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',raw TEXT NOT NULL DEFAULT '{}',notified_at INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,updated INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,psid TEXT,action TEXT NOT NULL,at INTEGER NOT NULL,detail TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,psid TEXT NOT NULL,at INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS events_conversation ON events(psid,at);
         CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(status,created);`);
       const owner = this.db.prepare('SELECT value FROM meta WHERE key=?').get('pageId');
+      this.ensureColumn('orders','notified_at','INTEGER NOT NULL DEFAULT 0');
       assert(!owner || owner.value === pageId, 'Database belongs to another Page');
       this.db.prepare('INSERT OR IGNORE INTO meta VALUES (?,?)').run('pageId',pageId);
       this.db.prepare('INSERT OR IGNORE INTO meta VALUES (?,?)').run('schemaVersion','1');
@@ -43,6 +44,10 @@ export class Store {
       }
       this.db.exec("UPDATE outbox SET status='unknown' WHERE status='sending'");
     } catch(e) { this.db?.close(); unlinkSync(this.lock); throw e; }
+  }
+  ensureColumn(table,column,definition) {
+    const exists = this.db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
+    if(!exists) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
   tx(fn) { this.db.exec('BEGIN IMMEDIATE'); try { const v=fn(); this.db.exec('COMMIT'); return v; } catch(e) { this.db.exec('ROLLBACK'); throw e; } }
   audit(psid,action,detail='') { this.db.prepare('INSERT INTO audit(psid,action,at,detail) VALUES (?,?,?,?)').run(psid,action,Date.now(),detail); }
@@ -170,6 +175,11 @@ export class Store {
       ON CONFLICT(psid) DO UPDATE SET status=excluded.status,customer_type=excluded.customer_type,customer_name=excluded.customer_name,phone=excluded.phone,address=excluded.address,products=excluded.products,fb_name=excluded.fb_name,notes=excluded.notes,raw=excluded.raw,updated=excluded.updated
     `).run(psid,status,merged.customer_type,merged.customer_name,merged.phone,merged.address,JSON.stringify(merged.products),merged.fb_name,merged.notes,JSON.stringify(merged.raw),current?.created??now,now);
     this.audit(psid,status==='ready'?'order_ready':'order_update',JSON.stringify({missing,products:merged.products}).slice(0,1000));
+    return this.order(psid);
+  }
+  markOrderNotified(psid) {
+    this.db.prepare('UPDATE orders SET notified_at=? WHERE psid=?').run(Date.now(),psid);
+    this.audit(psid,'order_notified','telegram');
     return this.order(psid);
   }
   reserveCall(j,c) {

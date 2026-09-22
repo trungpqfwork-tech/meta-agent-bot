@@ -1,0 +1,17 @@
+[Unit]
+Description=Page CSKH Hermes Service
+After=network.target
+
+[Service]
+Type=simple
+User=trungpq
+WorkingDirectory=/home/trungpq/.hermes/projects/page-cskh
+ExecStart=/home/trungpq/.nvm/versions/node/v24.19.0/bin/node src/service.mjs --config config.local.json
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

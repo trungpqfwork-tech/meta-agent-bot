@@ -1,4 +1,4 @@
-import { retrieve, agentPolicy, parseModelJson, validateAnswer } from './knowledge.mjs';
+import { retrieve, agentPolicy, answerFormatPolicy, parseModelJson, validateAnswer } from './knowledge.mjs';
 import { retrieveImages } from './images.mjs';
 import { appendFileSync,mkdirSync } from 'node:fs';
 import { dirname,resolve } from 'node:path';
@@ -38,10 +38,22 @@ export function openClawCompletion(api) {
   };
 }
 export class Worker {
-  constructor(config,store,complete,meta) { Object.assign(this,{config,store,complete,meta}); this.stopped=false; this.controller=new AbortController(); }
+  constructor(config,store,complete,meta,orderNotifier=null) { Object.assign(this,{config,store,complete,meta,orderNotifier}); this.stopped=false; this.controller=new AbortController(); }
   async infer(j,message,system) {
     if(!this.store.reserveCall(j,this.config)) throw new Error('agent_budget_exhausted');
     return this.complete({agentId:this.config.agentId,message:JSON.stringify(message),system,signal:this.controller.signal,timeoutMs:this.config.agentTimeoutMs});
+  }
+  async answerFromModel(j,payload,raw,docs) {
+    try { return validateAnswer(raw,docs); }
+    catch(e) {
+      // Models sometimes answer with usable prose instead of the JSON contract.
+      // Re-ask once for the envelope instead of discarding the answer and falling
+      // back to a canned reply.
+      if(typeof raw!=='string' || !raw.trim()) throw e;
+      log(this.logFile,`process answer_not_json psid=${j.psid} job=${j.id} error=${String(e?.message??e).slice(0,200)}`);
+      const repaired=await this.infer(j,{...payload,answer:String(raw).slice(0,4000)},answerFormatPolicy);
+      return validateAnswer(repaired,docs);
+    }
   }
   async senderAction(j,action,phase) {
     if(this.config.mode==='draft' || typeof this.meta.senderAction!=='function') return;
@@ -80,6 +92,16 @@ export class Worker {
       return null;
     }
   }
+  async notifyReadyOrder(j,order) {
+    if(!this.orderNotifier?.enabled || order?.status !== 'ready' || order.notified_at) return;
+    try {
+      const sent = await this.orderNotifier.notifyOrder({...order,psid:j.psid});
+      this.store.markOrderNotified(j.psid);
+      log(this.logFile,`process order_notify psid=${j.psid} sent=${sent}`);
+    } catch(e) {
+      log(this.logFile,`process order_notify_fail psid=${j.psid} error=${String(e?.message??e).slice(0,300)}`);
+    }
+  }
   async responseText(j,payload,answer,envFallback) {
     const candidate=answer.text?.trim();
     if(!needsRewrite(candidate,payload.currentMessage,envFallback)) return candidate;
@@ -106,10 +128,11 @@ export class Worker {
             order=s.saveOrder(j.psid,patch);
             payload={...payload,order:publicOrder(order)};
             log(this.logFile,`process order_update psid=${j.psid} status=${order.status} missing=${JSON.stringify(order.missing)} products=${JSON.stringify(order.products).slice(0,120)}`);
+            await this.notifyReadyOrder(j,order);
           }
         }
         const raw=await this.infer(j,payload,agentPolicy);
-        answer=validateAnswer(raw,docs);
+        answer=await this.answerFromModel(j,payload,raw,docs);
         // A second isolated check reduces unsupported/off-topic generated replies.
         // It is not a mathematical guarantee of semantic correctness.
         if(answer.action==='reply') {
@@ -132,7 +155,8 @@ export class Worker {
       } else {
         log(this.logFile,`process handoff psid=${j.psid} reason=${answer.reason}`);
         s.tx(()=>s.hold(j.psid,'WAITING',answer.reason));
-        state='WAITING'; version=s.conversation(j.psid).version; text=await this.responseText(j,payload,answer,c.handoffText);
+        state='WAITING'; version=s.conversation(j.psid).version;
+        text=c.handoffText;
       }
     } else if(answer.action==='out_of_scope') text=await this.responseText(j,payload,answer,c.outOfScopeText);
     else if(answer.action==='clarify') {

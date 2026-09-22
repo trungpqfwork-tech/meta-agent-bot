@@ -36,6 +36,9 @@ Runtime `.env` controls:
 - `PAGE_CSKH_ENABLE_HUMAN_HANDOFF=true|false`: when `false`, model handoff
   decisions are logged and answered with the clarify text, but the conversation
   stays in `BOT` for test-heavy runs.
+- `TELEGRAM_BOT_TOKEN` and `PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=["123","456"]`:
+  when set, every order that reaches `status='ready'` is sent once to each
+  configured Telegram chat id. Leave the array empty to disable notifications.
 - `PAGE_CSKH_EDGE_PORT=18892`: local loopback port for the PM2 webhook edge.
   Public HTTPS must proxy the webhook path to this port, never to admin or the
   full Gateway.
@@ -111,12 +114,14 @@ Each order tracks:
 - `address`
 - `products`: JSON array of requested products/quantities/needs
 - `status`: `collecting` until all required fields are present, then `ready`
+- `notified_at`: Telegram notification timestamp, `0` until successfully sent
 
 The model writes the customer-facing text; code only extracts/stores structured
 fields. If a customer wants to order, the bot should first identify whether they
 are a store/business buyer or a personal buyer, then ask naturally for missing
-fields. A ready order is not sent to external systems in v0.1; later workflows can
-read `orders` and process rows with `status='ready'`.
+fields. When Telegram notification env values are configured, a ready order is
+sent once to every chat id in `PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS`; later
+workflows can also read `orders` and process rows with `status='ready'`.
 
 ## Ambiguous send
 
