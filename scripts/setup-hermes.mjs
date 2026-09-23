@@ -46,6 +46,11 @@ export async function setupHermes(args=process.argv.slice(2)) {
   }
   mkdirSync(dirname(c.knowledgeFile),{recursive:true,mode:0o700});
   if(!existsSync(c.knowledgeFile)) copyFileSync(resolve(root,'knowledge-template/knowledge.json'),c.knowledgeFile);
+  const productsFile=resolve(dirname(file),'products.json');
+  if(!existsSync(productsFile)) copyFileSync(resolve(root,'products-template/products.json'),productsFile);
+  mkdirSync(c.imageDir,{recursive:true,mode:0o700});
+  mkdirSync(dirname(c.imageCatalogFile),{recursive:true,mode:0o700});
+  if(!existsSync(c.imageCatalogFile)) copyFileSync(resolve(root,'image-template/catalog.json'),c.imageCatalogFile);
   mkdirSync(dirname(c.database),{recursive:true,mode:0o700});
   const hermesHome=ensureDedicatedHermesHome(c);
   const unitFile=resolve(dirname(file),'page-cskh.service');

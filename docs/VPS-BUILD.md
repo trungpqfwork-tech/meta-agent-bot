@@ -58,7 +58,10 @@ node app/scripts/setup-hermes.mjs --config /srv/page-cskh/runtime/config.json   
 node app/scripts/setup-hermes.mjs --config /srv/page-cskh/runtime/config.json --apply  # ghi thật
 ```
 
-`--apply` tạo: `agent/` (AGENTS.md, SOUL.md, IDENTITY.md), `knowledge.json` (template), `data/`, và unit file `runtime/page-cskh.service` (systemd user unit, ExecStart trỏ vào `src/service.mjs` + config này).
+`--apply` tạo: `agent/` (AGENTS.md, SOUL.md, IDENTITY.md), `knowledge.json`
+(template), `products.json` (template), `images/catalog.json` (template),
+`data/`, và unit file `runtime/page-cskh.service` (systemd user unit, ExecStart
+trỏ vào `src/service.mjs` + config này).
 
 ## 5. Nạp KB từ Excel của Page
 
