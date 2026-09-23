@@ -4,9 +4,638 @@
     {
       "id": "example-faq",
       "title": "Mẫu FAQ — thay nội dung trước khi dùng",
-      "keywords": ["giờ mở cửa", "mấy giờ"],
+      "keywords": [
+        "giờ mở cửa",
+        "mấy giờ"
+      ],
       "content": "DỮ LIỆU MẪU: chưa có giờ mở cửa đã được xác nhận.",
       "approved": false,
+      "validUntil": null
+    },
+    {
+      "id": "product-ba-chi-bo",
+      "title": "Ba chỉ bò",
+      "keywords": [
+        "Ba chỉ bò",
+        "bò",
+        "Excel",
+        "Sử dụng làm lẩu",
+        "nướng",
+        "Blueribbon (JBS)",
+        "Teys",
+        "AMH",
+        "Kycol",
+        "ACC",
+        "Canada",
+        "Úc"
+      ],
+      "content": "Tên sản phẩm: Ba chỉ bò\nNhóm: bò\nXuất xứ: Canada, Úc\nThương hiệu/biến thể:\n- Excel: đặc tính Excel mỡ trắng, thịt thơm ngon nhưng tỷ lệ mỡ nhiều hơn nạc. Lưu ý pack date mùa hè nạc nhiều, đẹp. Mùa đông thì mỡ nhiều, dày hơn.; phù hợp Sử dụng làm lẩu, nướng\n- Blueribbon (JBS): đặc tính Tỷ lệ nạc cao, đỏ đẹp, thịt ăn thơm ngon, ko bị tình trạng nhiều mỡ giống excel; phù hợp Sử dụng làm lẩu, nướng\n- Teys, AMH, Kycol, ACC: đặc tính Tỷ lệ nạc cao, ăn thơm ngon nhưng hương vị không được bằng Canada. Hàng chia 2 loại hàng A và S. Hàng S chất lượng tốt hơn, mẫu mã đẹp hơn; phù hợp Sử dụng làm lẩu, nướng\nCông dụng/món phù hợp: Sử dụng làm lẩu, nướng\nGhi chú: Mã nhà máy sản xuất khác nhau chất lượng thịt sẽ khác nhau",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-ba-chi-heo",
+      "title": "Ba chỉ heo",
+      "keywords": [
+        "Ba chỉ heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Hấp luộc",
+        "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+        "cơm bình dân",
+        "nhà hàng",
+        "quán ăn",
+        "Nga",
+        "Ba lan",
+        "Đức"
+      ],
+      "content": "Tên sản phẩm: Ba chỉ heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg: đặc tính Thơm ngon; phù hợp Hấp luộc, rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp, cơm bình dân, nhà hàng, quán ăn\nCông dụng/món phù hợp: Hấp luộc, rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp, cơm bình dân, nhà hàng, quán ăn",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-bap-bo",
+      "title": "Bắp Bò",
+      "keywords": [
+        "Bắp Bò",
+        "bò",
+        "Friboi",
+        "Sử dụng làm lẩu",
+        "nướng",
+        "Brazil"
+      ],
+      "content": "Tên sản phẩm: Bắp Bò\nNhóm: bò\nXuất xứ: Brazil\nThương hiệu/biến thể:\n- Friboi: đặc tính Thơm ngon, giòn, hoa đẹp; phù hợp Sử dụng làm lẩu, nướng\nCông dụng/món phù hợp: Sử dụng làm lẩu, nướng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-bap-chuot-trau-64",
+      "title": "Bắp chuột trâu 64",
+      "keywords": [
+        "Bắp chuột trâu 64",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn...",
+        "Ấn Độ"
+      ],
+      "content": "Tên sản phẩm: Bắp chuột trâu 64\nNhóm: trâu\nXuất xứ: Ấn Độ\nThương hiệu/biến thể:\n- Alanna, Alsami, Blackgold, Almas, IAF: đặc tính Thơm ngon; phù hợp Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...\nCông dụng/món phù hợp: Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-bap-hoa-trau-60s",
+      "title": "Bắp hoa trâu 60s",
+      "keywords": [
+        "Bắp hoa trâu 60s",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn...",
+        "Ấn Độ"
+      ],
+      "content": "Tên sản phẩm: Bắp hoa trâu 60s\nNhóm: trâu\nXuất xứ: Ấn Độ\nThương hiệu/biến thể:\n- Alanna, Alsami, Blackgold, Almas, IAF: đặc tính Thơm ngon; phù hợp Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...\nCông dụng/món phù hợp: Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-ca-hoi",
+      "title": "Cá hồi",
+      "keywords": [
+        "Cá hồi",
+        "cá",
+        "Aqua",
+        "Nhà hàng",
+        "tiệc sự kiện...",
+        "Nauy",
+        "chilê",
+        "úc"
+      ],
+      "content": "Tên sản phẩm: Cá hồi\nNhóm: cá\nXuất xứ: Nauy, chilê, úc\nThương hiệu/biến thể:\n- Aqua: đặc tính Thơm ngon; phù hợp Nhà hàng, tiệc sự kiện...\nCông dụng/món phù hợp: Nhà hàng, tiệc sự kiện...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-chan-ga-nguyen-xuong",
+      "title": "Chân gà nguyên xương",
+      "keywords": [
+        "Chân gà nguyên xương",
+        "gà",
+        "Phù hợp các quán ướng",
+        "ăn vặt",
+        "ăn đêm...",
+        "Ý",
+        "Việt Nam"
+      ],
+      "content": "Tên sản phẩm: Chân gà nguyên xương\nNhóm: gà\nXuất xứ: Ý, Việt Nam\nCông dụng/món phù hợp: Phù hợp các quán ướng, ăn vặt, ăn đêm...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-chan-ga-rut-xuong",
+      "title": "Chân gà rút xương",
+      "keywords": [
+        "Chân gà rút xương",
+        "gà",
+        "Minh châu",
+        "Phù hợp các món nộm... Các quán ăn",
+        "nhà hàng",
+        "Việt Nam"
+      ],
+      "content": "Tên sản phẩm: Chân gà rút xương\nNhóm: gà\nXuất xứ: Việt Nam\nThương hiệu/biến thể:\n- Minh châu: đặc tính Thơm ngon; phù hợp Phù hợp các món nộm... Các quán ăn, nhà hàng\nCông dụng/món phù hợp: Phù hợp các món nộm... Các quán ăn, nhà hàng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-de-suon",
+      "title": "Dẻ sườn",
+      "keywords": [
+        "Dẻ sườn",
+        "bò",
+        "Blueribbon (JBS)",
+        "Sử dụng chủ yếu Nướng",
+        "Teys",
+        "AMH",
+        "Kycol",
+        "ACC",
+        "Canada",
+        "Úc"
+      ],
+      "content": "Tên sản phẩm: Dẻ sườn\nNhóm: bò\nXuất xứ: Canada, Úc\nThương hiệu/biến thể:\n- Blueribbon (JBS), Teys, AMH, Kycol, ACC: đặc tính Thơm ngon, Mềm, phần thịt gần như ngon nhất trên bò; phù hợp Sử dụng chủ yếu Nướng\nCông dụng/món phù hợp: Sử dụng chủ yếu Nướng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-duoi-trau-57",
+      "title": "Đuôi trâu 57",
+      "keywords": [
+        "Đuôi trâu 57",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn...",
+        "Ấn Độ"
+      ],
+      "content": "Tên sản phẩm: Đuôi trâu 57\nNhóm: trâu\nXuất xứ: Ấn Độ\nThương hiệu/biến thể:\n- Alanna, Alsami, Blackgold, Almas, IAF: đặc tính Thơm ngon; phù hợp Phù hợp các món lẩu... Phù các nhà hàng, quán ăn, bếp ăn...\nCông dụng/món phù hợp: Phù hợp các món lẩu... Phù các nhà hàng, quán ăn, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-ga-nguyen-con",
+      "title": "Gà nguyên con",
+      "keywords": [
+        "Gà nguyên con",
+        "gà",
+        "Hansong",
+        "Shinwoo",
+        "Hanreo",
+        "Phù hợp cho quán phở",
+        "bếp ăn...",
+        "Hàn Quốc"
+      ],
+      "content": "Tên sản phẩm: Gà nguyên con\nNhóm: gà\nXuất xứ: Hàn Quốc\nThương hiệu/biến thể:\n- Hansong, Shinwoo, Hanreo: đặc tính Thơm ngon; phù hợp Phù hợp cho quán phở, bếp ăn...\nCông dụng/món phù hợp: Phù hợp cho quán phở, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-gau-bo",
+      "title": "Gàu bò",
+      "keywords": [
+        "Gàu bò",
+        "bò",
+        "Grain Valley",
+        "Phù hợp nhúng lẩu",
+        "làm phở và nướng",
+        "Brazil"
+      ],
+      "content": "Tên sản phẩm: Gàu bò\nNhóm: bò\nXuất xứ: Brazil\nThương hiệu/biến thể:\n- Grain Valley: đặc tính Thơm ngon, giòn; phù hợp Phù hợp nhúng lẩu, làm phở và nướng\nCông dụng/món phù hợp: Phù hợp nhúng lẩu, làm phở và nướng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-gu-hoa",
+      "title": "Gù hoa",
+      "keywords": [
+        "Gù hoa",
+        "bò",
+        "Teys",
+        "Sử dụng ngon nhất khi nhúng lẩu hoặc nướng",
+        "Úc"
+      ],
+      "content": "Tên sản phẩm: Gù hoa\nNhóm: bò\nXuất xứ: Úc\nThương hiệu/biến thể:\n- Teys: đặc tính Thơm ngon, vân mỡ phân bố đều. Bộ phận này chỉ có trên bò giống Đực; phù hợp Sử dụng ngon nhất khi nhúng lẩu hoặc nướng\nCông dụng/món phù hợp: Sử dụng ngon nhất khi nhúng lẩu hoặc nướng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-khoanh-gio-truoc",
+      "title": "Khoanh giò trước",
+      "keywords": [
+        "Khoanh giò trước",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Khoanh giò trước\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-ma-heo-khong-gia",
+      "title": "Má heo không gia",
+      "keywords": [
+        "Má heo không gia",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Má heo không gia\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-mong-sau-heo",
+      "title": "Móng sau heo",
+      "keywords": [
+        "Móng sau heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Móng sau heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-mong-truoc-heo",
+      "title": "Móng trước heo",
+      "keywords": [
+        "Móng trước heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Móng trước heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-nac-dam-trau-65",
+      "title": "Nạc dăm trâu 65",
+      "keywords": [
+        "Nạc dăm trâu 65",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn...",
+        "Ấn Độ"
+      ],
+      "content": "Tên sản phẩm: Nạc dăm trâu 65\nNhóm: trâu\nXuất xứ: Ấn Độ\nThương hiệu/biến thể:\n- Alanna, Alsami, Blackgold, Almas, IAF: đặc tính Thơm ngon; phù hợp Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...\nCông dụng/món phù hợp: Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-nac-vai-heo",
+      "title": "Nạc vai heo",
+      "keywords": [
+        "Nạc vai heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Nạc vai heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-sun-non-heo",
+      "title": "Sụn non heo",
+      "keywords": [
+        "Sụn non heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Sụn non heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-suon-bo",
+      "title": "Sườn bò",
+      "keywords": [
+        "Sườn bò",
+        "bò",
+        "Miratorg",
+        "Phù hợp nướng",
+        "Nga"
+      ],
+      "content": "Tên sản phẩm: Sườn bò\nNhóm: bò\nXuất xứ: Nga\nThương hiệu/biến thể:\n- Miratorg: đặc tính Thơm ngon, ngậy, Day, nhiều thịt; phù hợp Phù hợp nướng\nCông dụng/món phù hợp: Phù hợp nướng",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-suon-canh-bo",
+      "title": "Sườn canh bò",
+      "keywords": [
+        "Sườn canh bò",
+        "bò",
+        "Swift",
+        "Hầm",
+        "Ninh",
+        "nấu phở",
+        "canh khoai...",
+        "Mỹ"
+      ],
+      "content": "Tên sản phẩm: Sườn canh bò\nNhóm: bò\nXuất xứ: Mỹ\nThương hiệu/biến thể:\n- Swift: đặc tính Thơm ngon; phù hợp Hầm, Ninh, nấu phở, canh khoai...\nCông dụng/món phù hợp: Hầm, Ninh, nấu phở, canh khoai...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-suon-canh-buom",
+      "title": "Sườn cánh buồm",
+      "keywords": [
+        "Sườn cánh buồm",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Sườn cánh buồm\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-than-trau-67",
+      "title": "Thăn trâu 67",
+      "keywords": [
+        "Thăn trâu 67",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn...",
+        "Ấn Độ"
+      ],
+      "content": "Tên sản phẩm: Thăn trâu 67\nNhóm: trâu\nXuất xứ: Ấn Độ\nThương hiệu/biến thể:\n- Alanna, Alsami, Blackgold, Almas, IAF: đặc tính Thơm ngon; phù hợp Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...\nCông dụng/món phù hợp: Phù hợp các món xào, phở, nướng, lẩu... Phù các nhà hàng, quán ăn, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-tim-heo",
+      "title": "Tim heo",
+      "keywords": [
+        "Tim heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Tim heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: đặc tính Thơm ngon; phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-toi-ga",
+      "title": "Tỏi gà",
+      "keywords": [
+        "Tỏi gà",
+        "gà",
+        "Tyson",
+        "Sanderson",
+        "Mout",
+        "Phù hợp cho quán gà rán",
+        "ăn vặt",
+        "bếp ăn...",
+        "Mỹ"
+      ],
+      "content": "Tên sản phẩm: Tỏi gà\nNhóm: gà\nXuất xứ: Mỹ\nThương hiệu/biến thể:\n- Tyson, Sanderson, Mout: đặc tính Thơm ngon; phù hợp Phù hợp cho quán gà rán, ăn vặt, bếp ăn...\nCông dụng/món phù hợp: Phù hợp cho quán gà rán, ăn vặt, bếp ăn...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "product-xuong-ong-heo",
+      "title": "Xương ống heo",
+      "keywords": [
+        "Xương ống heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc...",
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "content": "Tên sản phẩm: Xương ống heo\nNhóm: heo\nXuất xứ: Nga, Ba lan, Đức, hà Lan\nThương hiệu/biến thể:\n- APK, VLMK, Miratorg, Olyme: phù hợp Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...\nCông dụng/món phù hợp: Phù hợp các bếp ăn, nhà hàng, nấu cỗ, tiệc...",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "category-bo",
+      "title": "Nhóm sản phẩm bò",
+      "keywords": [
+        "bò",
+        "sản phẩm bò",
+        "nhóm bò",
+        "Ba chỉ bò",
+        "Bắp Bò",
+        "Dẻ sườn",
+        "Gàu bò",
+        "Gù hoa",
+        "Sườn bò",
+        "Sườn canh bò"
+      ],
+      "content": "Nhóm bò hiện có: Ba chỉ bò, Bắp Bò, Dẻ sườn, Gàu bò, Gù hoa, Sườn bò, Sườn canh bò.",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "category-heo",
+      "title": "Nhóm sản phẩm heo",
+      "keywords": [
+        "heo",
+        "sản phẩm heo",
+        "nhóm heo",
+        "Ba chỉ heo",
+        "Khoanh giò trước",
+        "Má heo không gia",
+        "Móng sau heo",
+        "Móng trước heo",
+        "Nạc vai heo",
+        "Sụn non heo",
+        "Sườn cánh buồm",
+        "Tim heo",
+        "Xương ống heo"
+      ],
+      "content": "Nhóm heo hiện có: Ba chỉ heo, Khoanh giò trước, Má heo không gia, Móng sau heo, Móng trước heo, Nạc vai heo, Sụn non heo, Sườn cánh buồm, Tim heo, Xương ống heo.",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "category-trau",
+      "title": "Nhóm sản phẩm trâu",
+      "keywords": [
+        "trâu",
+        "sản phẩm trâu",
+        "nhóm trâu",
+        "Bắp chuột trâu 64",
+        "Bắp hoa trâu 60s",
+        "Đuôi trâu 57",
+        "Nạc dăm trâu 65",
+        "Thăn trâu 67"
+      ],
+      "content": "Nhóm trâu hiện có: Bắp chuột trâu 64, Bắp hoa trâu 60s, Đuôi trâu 57, Nạc dăm trâu 65, Thăn trâu 67.",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "category-ca",
+      "title": "Nhóm sản phẩm cá",
+      "keywords": [
+        "cá",
+        "sản phẩm cá",
+        "nhóm cá",
+        "Cá hồi"
+      ],
+      "content": "Nhóm cá hiện có: Cá hồi.",
+      "approved": true,
+      "validUntil": null
+    },
+    {
+      "id": "category-ga",
+      "title": "Nhóm sản phẩm gà",
+      "keywords": [
+        "gà",
+        "sản phẩm gà",
+        "nhóm gà",
+        "Chân gà nguyên xương",
+        "Chân gà rút xương",
+        "Gà nguyên con",
+        "Tỏi gà"
+      ],
+      "content": "Nhóm gà hiện có: Chân gà nguyên xương, Chân gà rút xương, Gà nguyên con, Tỏi gà.",
+      "approved": true,
       "validUntil": null
     }
   ]

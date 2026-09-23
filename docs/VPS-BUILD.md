@@ -153,15 +153,31 @@ có tiến trình nào tự chạy được script này — lúc đó cần bư�
 Hermes (SSH/systemd/cloud-init/Ansible) để cài Hermes lần đầu.
 
 Script tạo profile (`--clone` để có sẵn provider + key, **không** copy token
-messaging), chạy `hermes skills trust <repo>` để `.agents/skills/` được load, set
-`terminal.cwd` tuyệt đối về repo, và in ra các bước còn lại. Các bước đó là thủ
-công vì liên quan secrets:
+messaging mặc định), chạy `hermes skills trust <repo>` để `.agents/skills/` được
+load, set `terminal.cwd` tuyệt đối về repo, và nếu runtime `.env` có các biến
+sau thì tự import bot Telegram admin vào profile `cskh-admin`:
 
-- pair bot Telegram cho profile: `hermes gateway setup` (hoặc dashboard →
-  Messaging → Telegram → Create with QR)
-- đặt `TELEGRAM_ALLOWED_USERS` = user id Telegram (dạng số) của chủ Page
-- **dùng bot khác** với bot cảnh báo trong `runtime/.env`; nếu dùng chung, gateway
-  sẽ poll chính bot đó và agent admin sẽ đọc/đáp cả trong group cảnh báo
+```dotenv
+PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN=123456:bot-token-cua-admin-agent
+PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS=1011998801
+```
+
+Script ghi hai giá trị này vào `$HOME/.hermes/profiles/cskh-admin/.env` dưới tên
+Hermes chuẩn `TELEGRAM_BOT_TOKEN` và `TELEGRAM_ALLOWED_USERS`, nhưng không in
+secret. Nếu runtime không nằm cạnh app ở `../runtime/.env`, truyền rõ:
+
+```bash
+scripts/setup-admin-agent.sh --runtime-env /srv/page-cskh/runtime/.env
+```
+
+Các bước còn lại:
+
+- **dùng bot khác** với bot cảnh báo `TELEGRAM_BOT_TOKEN` của service trong
+  `runtime/.env`; nếu dùng chung, gateway sẽ poll chính bot đó và agent admin sẽ
+  đọc/đáp cả trong group cảnh báo
+- nếu hai biến Telegram admin đã có trong `.env`, script sẽ tự chạy
+  `hermes gateway install --start-now --start-on-login`, nên bot admin bắt đầu
+  nhận Telegram ngay và tự lên lại sau reboot/login
 
 Chạy agent từ thư mục repo để `AGENTS.md` + skill có hiệu lực. **Bắt buộc**:
 `terminal.cwd` của profile phải là đường dẫn **tuyệt đối** tới repo — mặc định `.`

@@ -62,7 +62,12 @@ agent with terminal access. It is not automatic if no Hermes process exists yet.
 
 Both mechanisms are cwd-scoped: the profile's `terminal.cwd` must be an absolute
 path to the repo, otherwise AGENTS.md and the project skill silently do not load
-(the relative default `.` resolves to the Hermes home, not the launch dir).
+(the relative default `.` resolves to the Hermes home, not the launch dir). If
+runtime `.env` contains `PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN` and
+`PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS`, `scripts/setup-admin-agent.sh` imports
+those into the admin Hermes profile as `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_ALLOWED_USERS` without printing the token, then starts/enables the
+Hermes gateway for that profile; use a different bot from the service alert bot.
 
 The admin agent may operate the runtime dir, but must ask before restarting the
 service, preview before applying KB changes, and never print secrets. Customer

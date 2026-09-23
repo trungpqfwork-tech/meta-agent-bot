@@ -35,7 +35,12 @@ to the repo root. `terminal.cwd` must be an **absolute** path to the repo: with
 the default relative `.` the session cwd resolves to the Hermes home, and both
 the project rules and this skill silently fail to load — no error, just an agent
 that does not know the procedure. `scripts/setup-admin-agent.sh` sets it and
-`--check` verifies it.
+`--check` verifies it. If runtime `.env` has
+`PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN` and
+`PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS`, the script imports them into the admin
+Hermes profile as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS`, then starts
+and enables the Hermes gateway for that profile; keep this admin bot separate
+from the CSKH alert bot.
 
 ## Where things are
 
