@@ -134,16 +134,20 @@ test('awkward ordering handoff prose is rewritten when customer did not ask to o
 });
 test('order intake extracts and persists required customer fields',async t=>{
   const {s,c}=fixture(t,'live');s.ingest([inbound('111','order','em đặt 2kg ba chỉ bò, tên Nam, sdt 0912345678, giao 12 Láng Hạ, mua cá nhân')]);let text='';
+  const notified=[];
   const w=new Worker(c,s,async p=>{
     if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:'personal',customerName:'Nam',phone:'0912345678',address:'12 Láng Hạ',products:['2kg ba chỉ bò'],notes:null,ready:true});
     if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
     const payload=JSON.parse(p.message);
     assert.equal(payload.order.status,'ready');
     return JSON.stringify({action:'reply',text:'Dạ em đã ghi nhận đơn 2kg ba chỉ bò cho anh Nam, giao tới 12 Láng Hạ. Em sẽ chuyển xử lý bước tiếp theo ạ.',sourceIds:['hours'],reason:'order_ready'});
-  },{send:async(_,v)=>{text=v;return 'out';}});
+  },{send:async(_,v)=>{text=v;return 'out';}},{enabled:true,notifyOrder:async order=>{notified.push(order);return 2;}});
   await w.process(s.next());
   const order=s.order('111');
   assert.equal(order.status,'ready');
+  assert.ok(order.notified_at > 0);
+  assert.equal(notified.length,1);
+  assert.equal(notified[0].psid,'111');
   assert.equal(order.customer_type,'personal');
   assert.equal(order.customer_name,'Nam');
   assert.equal(order.phone,'0912345678');
@@ -151,6 +155,74 @@ test('order intake extracts and persists required customer fields',async t=>{
   assert.deepEqual(order.products,['2kg ba chỉ bò']);
   assert.match(text,/ghi nhận đơn|ba chỉ bò|Nam/);
 });
+test('ready order notification is not sent twice',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.saveOrder('111',{wantsOrder:true,customerType:'personal',customerName:'Nam',phone:'0912345678',address:'12 Láng Hạ',products:['2kg ba chỉ bò']});
+  s.markOrderNotified('111');
+  s.ingest([inbound('111','again','em bổ sung ghi chú giao buổi sáng')]);
+  let count=0;
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('bộ trích xuất thông tin đặt hàng')) return JSON.stringify({wantsOrder:true,customerType:null,customerName:null,phone:null,address:null,products:[],notes:'giao buổi sáng',ready:true});
+    if(p.system.includes('bộ kiểm tra')) return '{"inScope":true,"supported":true}';
+    return JSON.stringify({action:'reply',text:'Dạ em đã cập nhật ghi chú giao buổi sáng ạ.',sourceIds:['hours'],reason:'order_update'});
+  },{send:async()=> 'out'},{enabled:true,notifyOrder:async()=>{count++;return 1;}});
+  await w.process(s.next());
+  assert.equal(count,0);
+  assert.ok(s.order('111').notified_at > 0);
+});
+test('handoff alerts the consultant on Telegram and holds the conversation',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','hand','chân gà có ngâm hóa chất k')]);
+  const alerts=[];
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(s.next());
+  assert.equal(alerts.length,1);
+  assert.equal(alerts[0].psid,'111');
+  assert.equal(alerts[0].reason,'missing_safety_data');
+  assert.deepEqual(alerts[0].messages,['chân gà có ngâm hóa chất k']);
+  assert.equal(s.conversation('111').state,'WAITING');
+});
+
+test('handoff alert is not repeated for a job that already alerted',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','hand2','chân gà có ngâm hóa chất k')]);
+  const job=s.next();
+  s.markHandoffNotified(job.psid,job.id);
+  const alerts=[];
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(job);
+  assert.equal(alerts.length,0);
+  assert.equal(s.conversation('111').state,'WAITING');
+});
+
+test('suppressed handoff does not alert the consultant',async t=>{
+  const {s,c}=fixture(t,'live');
+  c.enableHumanHandoff=false;
+  s.ingest([inbound('111','sup','chân gà có ngâm hóa chất k')]);
+  const alerts=[];
+  const w=new Worker(c,s,async p=>{
+    if(p.system.includes('Chỉ trả JSON {"text"')) return '{"text":"Dạ dữ liệu em có chưa xác nhận vấn đề này, em xin phép kiểm tra lại ạ."}';
+    return JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'});
+  },{send:async()=> 'out'},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async info=>{alerts.push(info);return 1;}});
+  await w.process(s.next());
+  assert.equal(alerts.length,0);
+  assert.equal(s.conversation('111').state,'BOT');
+});
+
+test('a Telegram failure still hands the conversation to a human',async t=>{
+  const {s,c}=fixture(t,'live');
+  s.ingest([inbound('111','failnotify','chân gà có ngâm hóa chất k')]);
+  let text='';
+  const w=new Worker(c,s,async()=>JSON.stringify({action:'handoff',text:'',sourceIds:[],reason:'missing_safety_data'}),
+    {send:async(_,v)=>{text=v;return 'out'}},{enabled:true,notifyOrder:async()=>0,notifyHandoff:async()=>{throw new Error('Telegram notify failed for chat 111');}});
+  await w.process(s.next());
+  assert.equal(s.conversation('111').state,'WAITING');
+  assert.equal(text,c.handoffText);
+  assert.equal(s.handoffNotified(s.snapshot().jobs.at(-1).id),false);
+});
+
 test('collecting order continues extracting later customer details',async t=>{
   const {s,c}=fixture(t,'live');s.saveOrder('111',{wantsOrder:true,products:['chân gà rút xương']});
   s.ingest([inbound('111','details','mình là cửa hàng, tên Hạnh, số 0900000000, địa chỉ 5 Nguyễn Trãi')]);let text='';
@@ -301,6 +373,7 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_EDGE_PORT:'19992',
     PAGE_CSKH_IMAGE_DIR:'./product-images',
     PAGE_CSKH_IMAGE_CATALOG_FILE:'./product-images/catalog.json',
+    PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS:'["123","-100456"]',
     PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'4',
     PAGE_CSKH_MODE:'live',
     PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',
@@ -311,6 +384,7 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.pageId,'123');
   assert.equal(loaded.mode,'live');
   assert.equal(loaded.edgePort,19992);
+  assert.deepEqual(loaded.orderTelegramChatIds,['123','-100456']);
   assert.ok(loaded.imageDir.endsWith('/product-images'));
   assert.ok(loaded.imageCatalogFile.endsWith('/product-images/catalog.json'));
   assert.equal(loaded.messageDebounceSeconds,4);

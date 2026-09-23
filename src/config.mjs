@@ -11,7 +11,7 @@ export function loadConfig(file) {
   assert(c.schemaVersion === 1, 'Unsupported config schema');
   assert(typeof c.pageId==='string' && typeof c.appId==='string' && /^\d+$/.test(c.pageId) && /^\d+$/.test(c.appId), 'Set pageId and appId as numeric strings');
   assert(/^[a-z][a-z0-9-]{0,47}$/.test(c.agentId) && c.agentId !== 'main', 'Use a dedicated agentId, not main');
-  assert(typeof c.model === 'string' && c.model.includes('/') && !c.model.includes('REPLACE'), 'Select a configured provider/model');
+  assert(typeof c.model === 'string' && c.model.trim().length > 0 && !c.model.includes('REPLACE'), 'Set a model the Hermes runtime can call (bare id like deepseek-v4.1-flash, or provider/model)');
   assert(/^v\d+\.\d+$/.test(c.graphVersion), 'Invalid graphVersion');
   assert(['draft','live'].includes(c.mode), 'mode must be draft or live');
   c.waitingResetSeconds ??= 0;
@@ -24,6 +24,8 @@ export function loadConfig(file) {
   c.edgePort ??= 18892;
   assert(Number.isInteger(c.edgePort) && c.edgePort > 1024 && c.edgePort < 65536, 'Invalid edgePort');
   assert(c.edgePort !== c.adminPort, 'edgePort must differ from adminPort');
+  c.orderTelegramChatIds ??= [];
+  assert(Array.isArray(c.orderTelegramChatIds) && c.orderTelegramChatIds.every(x => typeof x === 'string' && x.trim()), 'Invalid orderTelegramChatIds');
   for (const k of ['maxDailyAgentCalls','maxCustomerCallsPerHour','agentTimeoutMs']) assert(Number.isInteger(c[k]) && c[k] > 0, `Invalid ${k}`);
   assert(Number.isInteger(c.waitingResetSeconds) && c.waitingResetSeconds >= 0, 'Invalid waitingResetSeconds');
   assert(Number.isInteger(c.messageDebounceSeconds) && c.messageDebounceSeconds >= 0 && c.messageDebounceSeconds <= 60, 'Invalid messageDebounceSeconds');
@@ -36,6 +38,10 @@ export function loadConfig(file) {
   for (const k of ['envFile','database','workspace','knowledgeFile','imageDir','imageCatalogFile']) {
     assert(typeof c[k] === 'string' && c[k], `${k} required`);
     c[k] = resolve(dirname(resolve(file)), c[k]);
+  }
+  if (c.hermesHome != null) {
+    assert(typeof c.hermesHome === 'string' && c.hermesHome.trim(), 'Invalid hermesHome');
+    c.hermesHome = resolve(dirname(resolve(file)), c.hermesHome);
   }
   assert(!within(c.workspace, c.envFile) && !within(c.workspace, c.database), 'Secrets/database must be outside agent workspace');
   return c;
@@ -68,6 +74,14 @@ function envCsv(env, name, fallback) {
   assert(values.length > 0, `${name} must contain at least one value`);
   return values;
 }
+function envJsonArray(env, name, fallback = '[]') {
+  const raw = env[name] ?? fallback;
+  let values;
+  try { values = JSON.parse(String(raw)); }
+  catch { throw new Error(`${name} must be a JSON array`); }
+  assert(Array.isArray(values), `${name} must be a JSON array`);
+  return values.map(x => String(x).trim()).filter(Boolean);
+}
 
 export function runtimeConfigFromEnv(env) {
   const pageId = envText(env, 'PAGE_CSKH_PAGE_ID');
@@ -88,6 +102,7 @@ export function runtimeConfigFromEnv(env) {
     envFile: envOptionalText(env, 'PAGE_CSKH_ENV_FILE', './.env'),
     database,
     workspace: envOptionalText(env, 'PAGE_CSKH_WORKSPACE', './agent'),
+    hermesHome: envOptionalText(env, 'PAGE_CSKH_HERMES_HOME', undefined),
     knowledgeFile: envOptionalText(env, 'PAGE_CSKH_KNOWLEDGE_FILE', './knowledge.json'),
     imageDir: envOptionalText(env, 'PAGE_CSKH_IMAGE_DIR', './images'),
     imageCatalogFile: envOptionalText(env, 'PAGE_CSKH_IMAGE_CATALOG_FILE', './images/catalog.json'),
@@ -95,6 +110,7 @@ export function runtimeConfigFromEnv(env) {
     publicWebhookUrl: envText(env, 'PAGE_CSKH_PUBLIC_WEBHOOK_URL'),
     adminPort: envInt(env, 'PAGE_CSKH_ADMIN_PORT', 18891),
     edgePort: envInt(env, 'PAGE_CSKH_EDGE_PORT', 18892),
+    orderTelegramChatIds: envJsonArray(env, 'PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS', '[]'),
     mode,
     waitingResetSeconds: envInt(env, 'PAGE_CSKH_WAITING_RESET_SECONDS', 0),
     messageDebounceSeconds: envInt(env, 'PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS', 2),
@@ -128,6 +144,9 @@ export function applyEnvOverrides(config, env) {
   }
   if (env.PAGE_CSKH_ENABLE_HUMAN_HANDOFF) {
     c.enableHumanHandoff = parseBool(env.PAGE_CSKH_ENABLE_HUMAN_HANDOFF.toLowerCase(), 'PAGE_CSKH_ENABLE_HUMAN_HANDOFF');
+  }
+  if (env.PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS) {
+    c.orderTelegramChatIds = envJsonArray(env, 'PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS');
   }
   return c;
 }

@@ -2,22 +2,2028 @@
   "schemaVersion": 1,
   "products": [
     {
-      "id": "sample-beef-belly",
-      "name": "Ba chỉ bò mẫu",
+      "id": "ba-chi-bo",
+      "name": "Ba chỉ bò",
       "category": "bò",
-      "origins": ["Canada", "Úc"],
+      "origins": [
+        "Canada",
+        "Úc"
+      ],
       "brands": [
         {
           "name": "Excel",
-          "traits": ["mỡ trắng", "mỡ nhiều hơn nạc"],
-          "bestFor": ["lẩu", "nướng", "khách thích béo"]
+          "traits": [
+            "Excel mỡ trắng",
+            "thịt thơm ngon nhưng tỷ lệ mỡ nhiều hơn nạc. Lưu ý pack date mùa hè nạc nhiều",
+            "đẹp. Mùa đông thì mỡ nhiều",
+            "dày hơn."
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        },
+        {
+          "name": "Blueribbon (JBS)",
+          "traits": [
+            "Tỷ lệ nạc cao",
+            "đỏ đẹp",
+            "thịt ăn thơm ngon",
+            "ko bị tình trạng nhiều mỡ giống excel"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        },
+        {
+          "name": "Teys",
+          "traits": [
+            "Tỷ lệ nạc cao",
+            "ăn thơm ngon nhưng hương vị không được bằng Canada. Hàng chia 2 loại hàng A và S. Hàng S chất lượng tốt hơn",
+            "mẫu mã đẹp hơn"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        },
+        {
+          "name": "AMH",
+          "traits": [
+            "Tỷ lệ nạc cao",
+            "ăn thơm ngon nhưng hương vị không được bằng Canada. Hàng chia 2 loại hàng A và S. Hàng S chất lượng tốt hơn",
+            "mẫu mã đẹp hơn"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        },
+        {
+          "name": "Kycol",
+          "traits": [
+            "Tỷ lệ nạc cao",
+            "ăn thơm ngon nhưng hương vị không được bằng Canada. Hàng chia 2 loại hàng A và S. Hàng S chất lượng tốt hơn",
+            "mẫu mã đẹp hơn"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        },
+        {
+          "name": "ACC",
+          "traits": [
+            "Tỷ lệ nạc cao",
+            "ăn thơm ngon nhưng hương vị không được bằng Canada. Hàng chia 2 loại hàng A và S. Hàng S chất lượng tốt hơn",
+            "mẫu mã đẹp hơn"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
         }
       ],
-      "useCases": ["lẩu", "nướng"],
-      "notes": ["Dữ liệu mẫu, chưa dùng để tư vấn khách."],
-      "keywords": ["ba chỉ bò mẫu", "lẩu", "nướng"],
+      "useCases": [
+        "Sử dụng làm lẩu",
+        "nướng"
+      ],
+      "notes": [
+        "Mã nhà máy sản xuất khác nhau chất lượng thịt sẽ khác nhau"
+      ],
+      "keywords": [
+        "Ba chỉ bò",
+        "bò",
+        "Excel",
+        "Sử dụng làm lẩu",
+        "nướng",
+        "Blueribbon (JBS)",
+        "Teys",
+        "AMH",
+        "Kycol",
+        "ACC"
+      ],
       "images": [],
-      "approved": false
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 4
+      }
+    },
+    {
+      "id": "ba-chi-heo",
+      "name": "Ba chỉ heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Hấp luộc",
+            "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+            "cơm bình dân",
+            "nhà hàng",
+            "quán ăn"
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Hấp luộc",
+            "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+            "cơm bình dân",
+            "nhà hàng",
+            "quán ăn"
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Hấp luộc",
+            "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+            "cơm bình dân",
+            "nhà hàng",
+            "quán ăn"
+          ]
+        }
+      ],
+      "useCases": [
+        "Hấp luộc",
+        "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+        "cơm bình dân",
+        "nhà hàng",
+        "quán ăn"
+      ],
+      "notes": [],
+      "keywords": [
+        "Ba chỉ heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Hấp luộc",
+        "rang cháy cạnh... Phù hợp cho các bếp ăn công nghiệp",
+        "cơm bình dân",
+        "nhà hàng",
+        "quán ăn"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 12
+      }
+    },
+    {
+      "id": "bap-bo",
+      "name": "Bắp Bò",
+      "category": "bò",
+      "origins": [
+        "Brazil"
+      ],
+      "brands": [
+        {
+          "name": "Friboi",
+          "traits": [
+            "Thơm ngon",
+            "giòn",
+            "hoa đẹp"
+          ],
+          "bestFor": [
+            "Sử dụng làm lẩu",
+            "nướng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Sử dụng làm lẩu",
+        "nướng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Bắp Bò",
+        "bò",
+        "Friboi",
+        "Sử dụng làm lẩu",
+        "nướng"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 5
+      }
+    },
+    {
+      "id": "bap-chuot-trau-64",
+      "name": "Bắp chuột trâu 64",
+      "category": "trâu",
+      "origins": [
+        "Ấn Độ"
+      ],
+      "brands": [
+        {
+          "name": "Alanna",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Alsami",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Blackgold",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Almas",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "IAF",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Bắp chuột trâu 64",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 26
+      }
+    },
+    {
+      "id": "bap-hoa-trau-60s",
+      "name": "Bắp hoa trâu 60s",
+      "category": "trâu",
+      "origins": [
+        "Ấn Độ"
+      ],
+      "brands": [
+        {
+          "name": "Alanna",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Alsami",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Blackgold",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Almas",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "IAF",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Bắp hoa trâu 60s",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 25
+      }
+    },
+    {
+      "id": "ca-hoi",
+      "name": "Cá hồi",
+      "category": "cá",
+      "origins": [
+        "Nauy",
+        "chilê",
+        "úc"
+      ],
+      "brands": [
+        {
+          "name": "Aqua",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Nhà hàng",
+            "tiệc sự kiện..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Nhà hàng",
+        "tiệc sự kiện..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Cá hồi",
+        "cá",
+        "Aqua",
+        "Nhà hàng",
+        "tiệc sự kiện..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 31
+      }
+    },
+    {
+      "id": "chan-ga-nguyen-xuong",
+      "name": "Chân gà nguyên xương",
+      "category": "gà",
+      "origins": [
+        "Ý",
+        "Việt Nam"
+      ],
+      "brands": [],
+      "useCases": [
+        "Phù hợp các quán ướng",
+        "ăn vặt",
+        "ăn đêm..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Chân gà nguyên xương",
+        "gà",
+        "Phù hợp các quán ướng",
+        "ăn vặt",
+        "ăn đêm..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 30
+      }
+    },
+    {
+      "id": "chan-ga-rut-xuong",
+      "name": "Chân gà rút xương",
+      "category": "gà",
+      "origins": [
+        "Việt Nam"
+      ],
+      "brands": [
+        {
+          "name": "Minh châu",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món nộm... Các quán ăn",
+            "nhà hàng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món nộm... Các quán ăn",
+        "nhà hàng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Chân gà rút xương",
+        "gà",
+        "Minh châu",
+        "Phù hợp các món nộm... Các quán ăn",
+        "nhà hàng"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 29
+      }
+    },
+    {
+      "id": "de-suon",
+      "name": "Dẻ sườn",
+      "category": "bò",
+      "origins": [
+        "Canada",
+        "Úc"
+      ],
+      "brands": [
+        {
+          "name": "Blueribbon (JBS)",
+          "traits": [
+            "Thơm ngon",
+            "Mềm",
+            "phần thịt gần như ngon nhất trên bò"
+          ],
+          "bestFor": [
+            "Sử dụng chủ yếu Nướng"
+          ]
+        },
+        {
+          "name": "Teys",
+          "traits": [
+            "Thơm ngon",
+            "Mềm",
+            "phần thịt gần như ngon nhất trên bò"
+          ],
+          "bestFor": [
+            "Sử dụng chủ yếu Nướng"
+          ]
+        },
+        {
+          "name": "AMH",
+          "traits": [
+            "Thơm ngon",
+            "Mềm",
+            "phần thịt gần như ngon nhất trên bò"
+          ],
+          "bestFor": [
+            "Sử dụng chủ yếu Nướng"
+          ]
+        },
+        {
+          "name": "Kycol",
+          "traits": [
+            "Thơm ngon",
+            "Mềm",
+            "phần thịt gần như ngon nhất trên bò"
+          ],
+          "bestFor": [
+            "Sử dụng chủ yếu Nướng"
+          ]
+        },
+        {
+          "name": "ACC",
+          "traits": [
+            "Thơm ngon",
+            "Mềm",
+            "phần thịt gần như ngon nhất trên bò"
+          ],
+          "bestFor": [
+            "Sử dụng chủ yếu Nướng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Sử dụng chủ yếu Nướng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Dẻ sườn",
+        "bò",
+        "Blueribbon (JBS)",
+        "Sử dụng chủ yếu Nướng",
+        "Teys",
+        "AMH",
+        "Kycol",
+        "ACC"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 7
+      }
+    },
+    {
+      "id": "duoi-trau-57",
+      "name": "Đuôi trâu 57",
+      "category": "trâu",
+      "origins": [
+        "Ấn Độ"
+      ],
+      "brands": [
+        {
+          "name": "Alanna",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Alsami",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Blackgold",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Almas",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "IAF",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Đuôi trâu 57",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 24
+      }
+    },
+    {
+      "id": "ga-nguyen-con",
+      "name": "Gà nguyên con",
+      "category": "gà",
+      "origins": [
+        "Hàn Quốc"
+      ],
+      "brands": [
+        {
+          "name": "Hansong",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán phở",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Shinwoo",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán phở",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Hanreo",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán phở",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp cho quán phở",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Gà nguyên con",
+        "gà",
+        "Hansong",
+        "Shinwoo",
+        "Hanreo",
+        "Phù hợp cho quán phở",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 27
+      }
+    },
+    {
+      "id": "gau-bo",
+      "name": "Gàu bò",
+      "category": "bò",
+      "origins": [
+        "Brazil"
+      ],
+      "brands": [
+        {
+          "name": "Grain Valley",
+          "traits": [
+            "Thơm ngon",
+            "giòn"
+          ],
+          "bestFor": [
+            "Phù hợp nhúng lẩu",
+            "làm phở và nướng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp nhúng lẩu",
+        "làm phở và nướng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Gàu bò",
+        "bò",
+        "Grain Valley",
+        "Phù hợp nhúng lẩu",
+        "làm phở và nướng"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 9
+      }
+    },
+    {
+      "id": "gu-hoa",
+      "name": "Gù hoa",
+      "category": "bò",
+      "origins": [
+        "Úc"
+      ],
+      "brands": [
+        {
+          "name": "Teys",
+          "traits": [
+            "Thơm ngon",
+            "vân mỡ phân bố đều. Bộ phận này chỉ có trên bò giống Đực"
+          ],
+          "bestFor": [
+            "Sử dụng ngon nhất khi nhúng lẩu hoặc nướng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Sử dụng ngon nhất khi nhúng lẩu hoặc nướng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Gù hoa",
+        "bò",
+        "Teys",
+        "Sử dụng ngon nhất khi nhúng lẩu hoặc nướng"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 8
+      }
+    },
+    {
+      "id": "khoanh-gio-truoc",
+      "name": "Khoanh giò trước",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Khoanh giò trước",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 13
+      }
+    },
+    {
+      "id": "ma-heo-khong-gia",
+      "name": "Má heo không gia",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Má heo không gia",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 16
+      }
+    },
+    {
+      "id": "mong-sau-heo",
+      "name": "Móng sau heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Móng sau heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 18
+      }
+    },
+    {
+      "id": "mong-truoc-heo",
+      "name": "Móng trước heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Móng trước heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 17
+      }
+    },
+    {
+      "id": "nac-dam-trau-65",
+      "name": "Nạc dăm trâu 65",
+      "category": "trâu",
+      "origins": [
+        "Ấn Độ"
+      ],
+      "brands": [
+        {
+          "name": "Alanna",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Alsami",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Blackgold",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Almas",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "IAF",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Nạc dăm trâu 65",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 22
+      }
+    },
+    {
+      "id": "nac-vai-heo",
+      "name": "Nạc vai heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Nạc vai heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 21
+      }
+    },
+    {
+      "id": "sun-non-heo",
+      "name": "Sụn non heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Sụn non heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 15
+      }
+    },
+    {
+      "id": "suon-bo",
+      "name": "Sườn bò",
+      "category": "bò",
+      "origins": [
+        "Nga"
+      ],
+      "brands": [
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon",
+            "ngậy",
+            "Day",
+            "nhiều thịt"
+          ],
+          "bestFor": [
+            "Phù hợp nướng"
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp nướng"
+      ],
+      "notes": [],
+      "keywords": [
+        "Sườn bò",
+        "bò",
+        "Miratorg",
+        "Phù hợp nướng"
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 10
+      }
+    },
+    {
+      "id": "suon-canh-bo",
+      "name": "Sườn canh bò",
+      "category": "bò",
+      "origins": [
+        "Mỹ"
+      ],
+      "brands": [
+        {
+          "name": "Swift",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Hầm",
+            "Ninh",
+            "nấu phở",
+            "canh khoai..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Hầm",
+        "Ninh",
+        "nấu phở",
+        "canh khoai..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Sườn canh bò",
+        "bò",
+        "Swift",
+        "Hầm",
+        "Ninh",
+        "nấu phở",
+        "canh khoai..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 11
+      }
+    },
+    {
+      "id": "suon-canh-buom",
+      "name": "Sườn cánh buồm",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Sườn cánh buồm",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 14
+      }
+    },
+    {
+      "id": "than-trau-67",
+      "name": "Thăn trâu 67",
+      "category": "trâu",
+      "origins": [
+        "Ấn Độ"
+      ],
+      "brands": [
+        {
+          "name": "Alanna",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Alsami",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Blackgold",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Almas",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "IAF",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các món xào",
+            "phở",
+            "nướng",
+            "lẩu... Phù các nhà hàng",
+            "quán ăn",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Thăn trâu 67",
+        "trâu",
+        "Alanna",
+        "Alsami",
+        "Blackgold",
+        "Almas",
+        "IAF",
+        "Phù hợp các món xào",
+        "phở",
+        "nướng",
+        "lẩu... Phù các nhà hàng",
+        "quán ăn",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 23
+      }
+    },
+    {
+      "id": "tim-heo",
+      "name": "Tim heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Tim heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 19
+      }
+    },
+    {
+      "id": "toi-ga",
+      "name": "Tỏi gà",
+      "category": "gà",
+      "origins": [
+        "Mỹ"
+      ],
+      "brands": [
+        {
+          "name": "Tyson",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán gà rán",
+            "ăn vặt",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Sanderson",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán gà rán",
+            "ăn vặt",
+            "bếp ăn..."
+          ]
+        },
+        {
+          "name": "Mout",
+          "traits": [
+            "Thơm ngon"
+          ],
+          "bestFor": [
+            "Phù hợp cho quán gà rán",
+            "ăn vặt",
+            "bếp ăn..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp cho quán gà rán",
+        "ăn vặt",
+        "bếp ăn..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Tỏi gà",
+        "gà",
+        "Tyson",
+        "Sanderson",
+        "Mout",
+        "Phù hợp cho quán gà rán",
+        "ăn vặt",
+        "bếp ăn..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 28
+      }
+    },
+    {
+      "id": "xuong-ong-heo",
+      "name": "Xương ống heo",
+      "category": "heo",
+      "origins": [
+        "Nga",
+        "Ba lan",
+        "Đức",
+        "hà Lan"
+      ],
+      "brands": [
+        {
+          "name": "APK",
+          "traits": [],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "VLMK",
+          "traits": [],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Miratorg",
+          "traits": [],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        },
+        {
+          "name": "Olyme",
+          "traits": [],
+          "bestFor": [
+            "Phù hợp các bếp ăn",
+            "nhà hàng",
+            "nấu cỗ",
+            "tiệc..."
+          ]
+        }
+      ],
+      "useCases": [
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "notes": [],
+      "keywords": [
+        "Xương ống heo",
+        "heo",
+        "APK",
+        "VLMK",
+        "Miratorg",
+        "Olyme",
+        "Phù hợp các bếp ăn",
+        "nhà hàng",
+        "nấu cỗ",
+        "tiệc..."
+      ],
+      "images": [],
+      "approved": true,
+      "source": {
+        "file": "Đặc tính sản phẩm.xlsx",
+        "sheet": "Đặc tính SP",
+        "row": 20
+      }
     }
   ]
 }

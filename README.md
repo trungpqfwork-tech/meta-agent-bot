@@ -1,7 +1,7 @@
-# OpenClaw Page CSKH — 0.1.0
+# Hermes Page CSKH — 0.1.0
 
-Plugin CSKH Facebook Page: webhook → durable SQLite inbox → dedicated OpenClaw
-agent → scoped KB → human handoff → guarded Messenger Send API.
+Standalone CSKH Facebook Page service: Meta webhook → durable SQLite inbox → Hermes
+completion adapter → scoped KB → human handoff → guarded Messenger Send API.
 
 **Installer: [START_HERE.md](START_HERE.md).**
 
@@ -9,9 +9,10 @@ agent → scoped KB → human handoff → guarded Messenger Send API.
 
 - Signed GET/POST webhook; Page filtering and deduplication.
 - Single-process durable queue; Page+customer history isolation.
-- Configured OpenClaw agent invoked through `runtime.subagent.complete` with an
-  exact empty tool surface. History is owned by this plugin's SQLite database,
-  **not a persistent native OpenClaw session** in this MVP.
+- Configured Hermes completion adapter with an exact empty tool surface. History is
+  owned by this service's SQLite database, **not a persistent native Hermes session**.
+  Optional `hermesHome` creates a dedicated CSKH Hermes runtime home for persona/model
+  context only; it is not customer memory.
 - Approved JSON knowledge documents, keyword retrieval, expiry checks, source
   validation and a second isolated model review for factual replies.
 - BOT / WAITING / HUMAN state, local takeover/resume console and audit history.
@@ -35,7 +36,7 @@ flowchart LR
 ```
 
 No extra npm runtime dependency: uses Node built-ins including `node:sqlite`.
-SDK import is resolved by the OpenClaw plugin loader. No build transpilation is
+Hermes integration is launched by `src/service.mjs`; no build transpilation is
 required because distributable runtime source is native ESM JavaScript (`.mjs`).
 
 ## Local development
@@ -46,7 +47,7 @@ npm test
 npm pack
 ```
 
-OpenClaw compatibility should be proved on the target host with setup, smoke and
+Hermes standalone compatibility should be proved on the target host with setup, smoke and
 acceptance checks before enabling live sends.
 
 ## Important boundaries

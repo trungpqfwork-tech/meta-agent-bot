@@ -67,6 +67,18 @@ is folded into one bot reply. Set it to `0` to disable debounce. Set
 keep bot ownership instead of actually parking a conversation in `WAITING` after
 a handoff decision.
 
+Order notifications and handoff alerts are optional. Set `TELEGRAM_BOT_TOKEN` and
+`PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS` as a JSON array when ready orders and human
+handoffs should be sent to Telegram:
+
+```dotenv
+TELEGRAM_BOT_TOKEN=123456:telegram-bot-token
+PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=["123456789","-1001234567890"]
+```
+
+Leave `PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=[]` to disable Telegram order
+notifications and handoff alerts.
+
 `PAGE_CSKH_EDGE_PORT` controls the local webhook-only PM2 edge port. The public
 domain must reverse proxy only `PAGE_CSKH_WEBHOOK_PATH` to
 `127.0.0.1:${PAGE_CSKH_EDGE_PORT}`. `PAGE_CSKH_ADMIN_PORT` is private operator

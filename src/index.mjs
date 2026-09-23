@@ -4,6 +4,7 @@ import { Store } from './store.mjs';
 import { makeWebhook } from './webhook.mjs';
 import { Worker,openClawCompletion } from './worker.mjs';
 import { metaClient } from './meta.mjs';
+import { telegramNotifier } from './telegram.mjs';
 import { startAdmin } from './admin.mjs';
 import { loadKnowledge } from './knowledge.mjs';
 
@@ -24,10 +25,11 @@ export default definePluginEntry({
         const base=loadConfig(file), secrets=loadSecrets(base.envFile,base.workspace), c=applyEnvOverrides(base,secrets);
         loadKnowledge(c.knowledgeFile);
         const meta=metaClient(c,secrets);
+        const notifier=telegramNotifier(c,secrets);
         if(c.mode==='live') await meta.probe();
         try {
           store=new Store(c.database,c.pageId);
-          worker=new Worker(c,store,openClawCompletion(api),meta);
+          worker=new Worker(c,store,openClawCompletion(api),meta,notifier);
           admin=await startAdmin(c,secrets,store);
           handler=makeWebhook(c,secrets,store);
           worker.start(()=>api.logger.error('page-cskh: worker failed; inspect local operator status'));
