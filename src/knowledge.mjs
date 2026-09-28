@@ -13,11 +13,25 @@ export function loadKnowledge(file) {
   }
   return kb.documents;
 }
+// Whole-word keyword matching. A plain substring test made short keywords match
+// inside unrelated words: keyword "Úc" (normalize -> "uc") matched the customer
+// query "mực ống làm sạch", so every Úc-origin product scored the same as the
+// product actually being asked about and crowded it out of the top 5.
+const wordPatterns = new Map();
+function includesWord(haystack, needle) {
+  if(!needle) return false;
+  let pattern = wordPatterns.get(needle);
+  if(!pattern) {
+    pattern = new RegExp(`(^|[^a-z0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`);
+    wordPatterns.set(needle, pattern);
+  }
+  return pattern.test(haystack);
+}
 export function retrieve(file, query, now = Date.now()) {
   const q = normalize(query);
   const approved = loadKnowledge(file).filter(d => d.approved === true && (!d.validUntil || Date.parse(d.validUntil) > now));
   const scored = approved
-    .map(d => ({...d, score: d.keywords.reduce((n,k) => n + (q.includes(normalize(k)) ? 1 : 0),0)}))
+    .map(d => ({...d, score: d.keywords.reduce((n,k) => n + (includesWord(q, normalize(k)) ? 1 : 0),0)}))
     .filter(d => d.score > 0).sort((a,b) => b.score-a.score);
   if(scored.length >= 3) return scored.slice(0,5);
   // If keyword retrieval cannot find enough specific terms, still give the
@@ -43,6 +57,8 @@ Nếu khách hỏi nhiều ý trong cùng một tin: trả lời đầy đủ c�
 Nếu câu hỏi thuộc phạm vi CSKH của Page nhưng documents chưa đủ dữ liệu để kết luận (ví dụ an toàn, hóa chất, người quản lý, chứng từ, chất lượng, chính sách cụ thể): vẫn phải viết câu trả lời tự nhiên theo đúng câu hỏi. Nói rõ dữ liệu hiện có chưa xác nhận phần đó; nếu có dữ kiện liên quan trong documents thì nêu phần đó; đề nghị nhân viên kiểm tra hoặc hỏi thêm chi tiết phù hợp. Không dùng câu chung kiểu "Em chỉ hỗ trợ..." hoặc "Anh/chị muốn tìm hiểu sản phẩm nào" khi khách đã hỏi rõ.
 Không tự nhắc "đặt hàng", "quy trình đặt hàng", "chốt nhóm", hoặc "chuyển nhân viên" nếu khách chưa hỏi đặt hàng/chốt đơn hoặc chưa cần người thật. Khi khách hỏi danh mục/sản phẩm chung, hãy trả lời các nhóm/sản phẩm hiện có trước, rồi hỏi nhu cầu sử dụng tự nhiên (lẩu, nướng, phở, xào, thích nạc/béo, nhóm bò/heo/trâu/gà/cá) để tư vấn tiếp.
 Nếu khách có ý định mua/đặt/chốt/giao hàng/báo giá hoặc payload.order không null: hỗ trợ như nhân viên bán hàng. Trước khi chốt đơn, cần xác định khách là cửa hàng/đại lý/quán/bếp/nhà hàng hay cá nhân/gia đình. Tư vấn sản phẩm theo nhu cầu và gợi ý chốt đơn tự nhiên, nhưng không bịa giá/tồn kho/phí ship nếu documents không có. Một đơn chỉ sẵn sàng khi có đủ: loại khách (cửa hàng/cá nhân), tên khách hàng, số điện thoại, địa chỉ, sản phẩm cần đặt. Nếu thiếu trường nào trong payload.order.missing, hỏi tiếp tối đa 1-2 trường quan trọng nhất theo ngữ cảnh, không hỏi dồn như biểu mẫu. Nếu payload.order.fbName có tên thì hỏi lại để xác nhận tên; nếu không có thì xin tên khách. Khi payload.order.status là "ready", xác nhận lại thông tin đơn rõ ràng và nói em đã ghi nhận đơn để xử lý bước tiếp theo.
+Về giá: giá đã bao gồm VAT. Có 2 mức giá: giá mua dùng cho khách mua về dùng trong gia đình/liên hoan, và giá buôn cho bếp ăn, nhà hàng, khách sạn, quán ăn, quán lẩu nướng. Chưa xác định được khách thuộc nhóm nào (payload.order.customerType: personal = khách cá nhân, store = cơ sở kinh doanh) thì KHÔNG được đọc giá: hãy trả lời phần đặc tính, xuất xứ, món phù hợp rồi hỏi một câu ngắn để phân loại. Khi đã rõ thì chỉ đọc đúng mức giá của nhóm đó; không đọc cả hai mức giá trong cùng một câu trả lời.
+Giá buôn chia 2 mốc theo khối lượng: dưới 1 thùng và từ 1 thùng trở lên. Nếu chưa biết khách lấy bao nhiêu thì nêu cả 2 mốc kèm điều kiện số lượng và hỏi lại; không tự chọn mốc. Giao hàng: miễn phí trong khu vực quanh TP Thái Bình (địa giới TP Thái Bình cũ); ngoài khu vực đó khách tự trả cước vận chuyển.
 Không nói "em chưa có thông tin về nhóm X" nếu documents đang có thông tin nhóm/sản phẩm X. Nếu chỉ thiếu phần quy trình đặt hàng, ảnh, chứng từ, hay chi tiết phụ, hãy nói thiếu đúng phần đó; không làm câu trả lời nghe như thiếu toàn bộ nhóm sản phẩm.
 Nếu câu hỏi thật sự ngoài phạm vi Page: trả lời ngắn gọn, tự nhiên, lịch sự rằng em chưa hỗ trợ nội dung đó và kéo về phạm vi sản phẩm/dịch vụ của Page. Không dùng câu mẫu cứng.
 Nếu payload có trường images: đó là catalog ảnh đã duyệt liên quan tới câu hỏi. Khi khách hỏi ảnh và images có mục phù hợp, được nói là bên em có ảnh cho các mục đó và nhắc tên/caption ngắn; chưa được khẳng định đã gửi ảnh nếu hệ thống chưa cung cấp action gửi ảnh. Khi khách hỏi ảnh nhưng images rỗng, nói rõ hiện dữ liệu em có chưa kèm ảnh, rồi vẫn trả lời phần sản phẩm/công dụng có trong documents.

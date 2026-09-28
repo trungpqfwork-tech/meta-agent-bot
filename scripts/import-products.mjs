@@ -76,6 +76,124 @@ function val(row, aliases) {
   const k = keyOf(row, aliases);
   return k ? row[k] : '';
 }
+// Exact whole-header match. Word-boundary matching is too loose for a bare
+// "Giá" alias: it also matches the header "Giá lẻ", so the generic price would
+// silently overwrite the retail one.
+function exactVal(row, names) {
+  const wanted = names.map(normalize).filter(Boolean);
+  for(const [k,v] of Object.entries(row)) {
+    if(wanted.includes(normalize(k))) return v;
+  }
+  return '';
+}
+// Two price tiers: what a household pays, and what a business pays
+// (restaurant, canteen, hotel, hotpot/grill shop). The wholesale tier is split by
+// order size: below one pack vs one pack and up.
+function bandOfKey(key) {
+  const k = normalize(key);
+  if(!/thung/.test(k)) return null;
+  if(/(duoi|nho hon|chua du|khong du|<)/.test(k)) return 'under';
+  // "Giá Thùng" is the operator's name for the one-pack-and-up price.
+  if(/(tro len|tu 1|tu mot|day thung|du thung|>=|>|≥|gia thung)/.test(k)) return 'from';
+  return null;
+}
+// Any header that mentions a pack size is a band column, never the flat price —
+// otherwise the bare "Giá buôn" alias would swallow "Giá buôn từ 1 thùng".
+function valNotBand(row, aliases) {
+  for(const alias of aliases) {
+    const needle = normalize(alias);
+    if(!needle) continue;
+    const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(needle)}($|[^a-z0-9])`);
+    const hit = Object.keys(row).find(k => bandOfKey(k) === null && pattern.test(normalize(k)));
+    if(hit) return row[hit];
+  }
+  return '';
+}
+function priceFromRow(row) {
+  const tier = normalize(cleanupValue(val(row, ['Bảng giá','Loại giá','Nhóm giá','Price tier','Tier'])));
+  const unit = cleanupValue(exactVal(row, ['Đơn vị','Đơn vị tính','ĐVT','Unit']));
+  // 'Quy cách' is the wholesale pack (whole thùng); 'Đóng gói' is the retail pack.
+  // They must not share one field: a later retail import would overwrite the
+  // wholesale pack size and print "147/Khay" for a price that is really per kg.
+  const pack = cleanupValue(exactVal(row, ['Quy cách thùng','Quy cách','Đóng gói','Pack size']));
+  const priceValidUntil = cleanupValue(exactVal(row, ['Hiệu lực đến','Hiệu lực','Ngày hết hạn','Hết hạn','Valid until']));
+  let priceRetail = cleanupValue(valNotBand(row, ['Giá mua dùng','Giá lẻ','Giá bán lẻ','Giá khách lẻ','Giá cá nhân','Retail price','Retail']));
+  let priceWholesale = cleanupValue(valNotBand(row, ['Giá buôn','Giá bán buôn','Giá sỉ','Giá bán sỉ','Giá khách sỉ','Wholesale price','Wholesale']));
+  let priceWholesaleUnder = '', priceWholesaleFrom = '';
+  for(const [k,v] of Object.entries(row)) {
+    const band = bandOfKey(k);
+    const value = cleanupValue(v);
+    if(!value) continue;
+    if(band === 'under' && !priceWholesaleUnder) priceWholesaleUnder = value;
+    if(band === 'from' && !priceWholesaleFrom) priceWholesaleFrom = value;
+  }
+  const generic = cleanupValue(exactVal(row, ['Giá','Đơn giá','Price']));
+  if(generic) {
+    if(/buon|si|wholesale|store/.test(tier)) { if(!priceWholesale) priceWholesale = generic; }
+    else if(!priceRetail) priceRetail = generic;
+  }
+  const hasRetail = Boolean(priceRetail);
+  const hasWholesale = Boolean(priceWholesale || priceWholesaleUnder || priceWholesaleFrom);
+  return {
+    priceRetail, priceWholesale, priceWholesaleUnder, priceWholesaleFrom,
+    priceUnitRetail: hasRetail ? unit : '',
+    packSizeRetail: hasRetail ? pack : '',
+    priceUnitWholesale: hasWholesale ? unit : '',
+    packSizeWholesale: hasWholesale ? pack : '',
+    priceValidUntil
+  };
+}
+// The operator sheets write prices as bare thousands ("205" = 205.000đ). Verified
+// against the sheet's own arithmetic: Nét 185.25 = Cost 183.75 + Cước 1.5, and
+// 205 - 185.25 = 19.75, the margin column.
+export function formatPrice(value) {
+  const s = String(value ?? '').trim();
+  if(!s) return '';
+  if(/^\d+$/.test(s)) return `${(Number(s) * 1000).toLocaleString('vi-VN')}đ`;
+  return s;
+}
+function hasPrice(p) {
+  const priced = s => Boolean(s && (s.priceRetail || s.priceWholesale || s.priceWholesaleUnder || s.priceWholesaleFrom));
+  return priced(p) || Boolean(p.brands?.some(priced));
+}
+function hasBand(p) {
+  return Boolean(p.priceWholesaleUnder || p.priceWholesaleFrom);
+}
+function priceLine(scope) {
+  const unitW = scope.priceUnitWholesale ? `/${scope.priceUnitWholesale}` : '';
+  const unitR = scope.priceUnitRetail ? `/${scope.priceUnitRetail}` : '';
+  const until = scope.priceValidUntil ? ` (hiệu lực đến ${scope.priceValidUntil})` : '';
+  const parts = [];
+  if(scope.priceRetail) {
+    parts.push(`giá mua dùng ${formatPrice(scope.priceRetail)}${unitR}${scope.packSizeRetail ? ` ${scope.packSizeRetail}` : ''}`);
+  }
+  const whole = [];
+  if(hasBand(scope)) {
+    if(scope.priceWholesaleUnder) whole.push(`dưới 1 thùng ${formatPrice(scope.priceWholesaleUnder)}${unitW}`);
+    if(scope.priceWholesaleFrom) whole.push(`từ 1 thùng ${formatPrice(scope.priceWholesaleFrom)}${unitW}`);
+  } else if(scope.priceWholesale) whole.push(`${formatPrice(scope.priceWholesale)}${unitW}`);
+  if(whole.length) parts.push(`giá buôn ${whole.join(', ')}`);
+  return parts.length ? `${parts.join('; ')}${until}` : '';
+}
+// Audience-labelled price lines. The document states who each price is for, so
+// the model selects a tier instead of reading out both tables.
+function productPriceLines(p, indent='') {
+  const unitR = p.priceUnitRetail ? `/${p.priceUnitRetail}` : '';
+  const unitW = p.priceUnitWholesale ? `/${p.priceUnitWholesale}` : '';
+  const until = p.priceValidUntil ? ` (hiệu lực đến ${p.priceValidUntil})` : '';
+  const out = [];
+  if(p.priceRetail) out.push(`${indent}Giá mua dùng (khách mua về dùng gia đình, liên hoan): ${formatPrice(p.priceRetail)}${unitR}${p.packSizeRetail ? ` ${p.packSizeRetail}` : ''}${until}`);
+  if(hasBand(p)) {
+    const pack = p.packSizeWholesale ? ` — quy cách ${p.packSizeWholesale}` : '';
+    out.push(`${indent}Giá buôn (bếp ăn, nhà hàng, khách sạn, quán lẩu nướng)${pack}:`);
+    if(p.priceWholesaleUnder) out.push(`${indent}- Dưới 1 thùng: ${formatPrice(p.priceWholesaleUnder)}${unitW}${until}`);
+    if(p.priceWholesaleFrom) out.push(`${indent}- Từ 1 thùng trở lên: ${formatPrice(p.priceWholesaleFrom)}${unitW}${until}`);
+  } else if(p.priceWholesale) {
+    const pack = p.packSizeWholesale ? ` — quy cách ${p.packSizeWholesale}` : '';
+    out.push(`${indent}Giá buôn (bếp ăn, nhà hàng, khách sạn, quán lẩu nướng)${pack}: ${formatPrice(p.priceWholesale)}${unitW}${until}`);
+  }
+  return out;
+}
 export function cleanupValue(value) {
   return String(value ?? '').trim().replace(/[.,;:…\s]+$/, '').trim();
 }
@@ -102,6 +220,13 @@ function productFromRow(row, meta={}) {
   const origins = uniq([val(row, ['Xuất xứ','Origin','Nguồn gốc'])]).map(cleanupValue).filter(Boolean);
   const notes = uniq([val(row, ['Ghi chú','Lưu ý','Note','Notes'])]).map(cleanupValue).filter(Boolean);
   const brandNames = uniq([brand]).map(cleanupValue).filter(Boolean);
+  const prices = priceFromRow(row);
+  // When the row names a brand, the price belongs to that brand only — putting it
+  // on the product too would advertise one brand's price for the whole product.
+  const brandPriced = brandNames.length > 0;
+  const productPrices = brandPriced
+    ? {priceRetail:'', priceWholesale:'', priceUnit:prices.priceUnit, priceValidUntil:prices.priceValidUntil}
+    : prices;
   const keywords = uniq([
     name,
     category,
@@ -115,13 +240,14 @@ function productFromRow(row, meta={}) {
     name,
     category,
     origins,
-    brands: brandNames.map(b => ({name:b, traits, bestFor:useCases})),
+    brands: brandNames.map(b => ({name:b, traits, bestFor:useCases, ...(brandPriced ? prices : {})})),
     useCases,
     notes,
     keywords,
     images: image ? [`image-${slug(name)}`] : [],
     approved: true,
-    source: meta
+    source: meta,
+    ...productPrices
   };
   if(image) product.imageSource = image;
   return product;
@@ -133,7 +259,18 @@ function mergeProduct(existing, incoming) {
     if(i >= 0) brands[i] = {
       ...brands[i],
       traits: uniq([brands[i].traits ?? [], b.traits ?? []]),
-      bestFor: uniq([brands[i].bestFor ?? [], b.bestFor ?? []])
+      bestFor: uniq([brands[i].bestFor ?? [], b.bestFor ?? []]),
+      // A table that carries no price column must never wipe a price already
+      // imported by the other table.
+      priceRetail: b.priceRetail || brands[i].priceRetail || '',
+      priceWholesale: b.priceWholesale || brands[i].priceWholesale || '',
+      priceWholesaleUnder: b.priceWholesaleUnder || brands[i].priceWholesaleUnder || '',
+      priceWholesaleFrom: b.priceWholesaleFrom || brands[i].priceWholesaleFrom || '',
+      priceUnitRetail: b.priceUnitRetail || brands[i].priceUnitRetail || '',
+      packSizeRetail: b.packSizeRetail || brands[i].packSizeRetail || '',
+      priceUnitWholesale: b.priceUnitWholesale || brands[i].priceUnitWholesale || '',
+      packSizeWholesale: b.packSizeWholesale || brands[i].packSizeWholesale || '',
+      priceValidUntil: b.priceValidUntil || brands[i].priceValidUntil || ''
     };
     else brands.push(b);
   }
@@ -146,6 +283,15 @@ function mergeProduct(existing, incoming) {
     notes: uniq([existing.notes ?? [], incoming.notes ?? []]),
     keywords: uniq([existing.keywords ?? [], incoming.keywords ?? []]),
     images: uniq([existing.images ?? [], incoming.images ?? []]),
+    priceRetail: incoming.priceRetail || existing.priceRetail || '',
+    priceWholesale: incoming.priceWholesale || existing.priceWholesale || '',
+    priceWholesaleUnder: incoming.priceWholesaleUnder || existing.priceWholesaleUnder || '',
+    priceWholesaleFrom: incoming.priceWholesaleFrom || existing.priceWholesaleFrom || '',
+    priceUnitRetail: incoming.priceUnitRetail || existing.priceUnitRetail || '',
+    packSizeRetail: incoming.packSizeRetail || existing.packSizeRetail || '',
+    priceUnitWholesale: incoming.priceUnitWholesale || existing.priceUnitWholesale || '',
+    packSizeWholesale: incoming.packSizeWholesale || existing.packSizeWholesale || '',
+    priceValidUntil: incoming.priceValidUntil || existing.priceValidUntil || '',
     approved: incoming.approved ?? existing.approved ?? true
   };
 }
@@ -161,7 +307,8 @@ function contentForProduct(p) {
     for(const b of p.brands) {
       const details = [
         b.traits?.length ? `đặc tính ${b.traits.join(', ')}` : '',
-        b.bestFor?.length ? `phù hợp ${b.bestFor.join(', ')}` : ''
+        b.bestFor?.length ? `phù hợp ${b.bestFor.join(', ')}` : '',
+        priceLine(b)
       ].filter(Boolean).join('; ');
       grouped.set(details, [...(grouped.get(details) ?? []), b.name]);
     }
@@ -169,6 +316,7 @@ function contentForProduct(p) {
       lines.push(`- ${names.join(', ')}${details ? `: ${details}` : ''}`);
     }
   }
+  lines.push(...productPriceLines(p));
   if(p.useCases?.length) lines.push(`Công dụng/món phù hợp: ${p.useCases.join(', ')}`);
   if(p.notes?.length) lines.push(`Ghi chú: ${p.notes.join('; ')}`);
   if(p.images?.length) lines.push(`Ảnh: ${p.images.join(', ')}`);
@@ -178,7 +326,17 @@ function knowledgeDocForProduct(p) {
   return {
     id: `product-${p.id}`,
     title: p.name,
-    keywords: uniq([p.name, p.category, p.keywords ?? [], p.origins ?? [], p.useCases ?? [], p.brands?.map(b => b.name) ?? []]),
+    keywords: uniq([
+      p.name,
+      p.category,
+      p.keywords ?? [],
+      p.origins ?? [],
+      p.useCases ?? [],
+      p.brands?.map(b => b.name) ?? [],
+      // Retrieval scores keyword hits, so a price question needs its own keyword
+      // or it competes with every other product on the bare product name.
+      hasPrice(p) ? [`giá ${p.name}`, `bảng giá ${p.name}`] : []
+    ]),
     content: contentForProduct(p),
     approved: p.approved === true,
     validUntil: null
@@ -398,7 +556,7 @@ export async function buildImportPlan({file, runtimeDir, sheets}) {
   const images = {schemaVersion:1, images:[...imageById.values()].sort((a,b) => a.title.localeCompare(b.title, 'vi'))};
   return {
     paths:{productsFile, knowledgeFile, imageCatalogFile},
-    summary:{importedRows: incoming.length, added, updated, skipped, totalProducts:products.length, totalKnowledgeDocs:knowledge.documents.length, totalImages:images.images.length},
+    summary:{importedRows: incoming.length, added, updated, skipped, totalProducts:products.length, totalKnowledgeDocs:knowledge.documents.length, totalImages:images.images.length, withRetailPrice:products.filter(p => p.priceRetail || p.brands?.some(b => b.priceRetail)).length, withWholesalePrice:products.filter(p => p.priceWholesale || p.priceWholesaleUnder || p.priceWholesaleFrom || p.brands?.some(b => b.priceWholesale || b.priceWholesaleUnder || b.priceWholesaleFrom)).length},
     products:{schemaVersion:1, products},
     knowledge,
     images
@@ -413,6 +571,8 @@ function printPreview(plan) {
   console.log(`- Update/merge: ${summary.updated.length}`);
   console.log(`- Knowledge docs after apply: ${summary.totalKnowledgeDocs}`);
   console.log(`- Image records after apply: ${summary.totalImages}`);
+  console.log(`- Products with retail price: ${summary.withRetailPrice ?? 0}`);
+  console.log(`- Products with wholesale price: ${summary.withWholesalePrice ?? 0}`);
   for(const item of summary.added.slice(0,10)) console.log(`  + ${item.name} (${item.id})`);
   for(const item of summary.updated.slice(0,10)) console.log(`  ~ ${item.name} (${item.id})`);
   console.log('\nUse --apply to write runtime files after reviewing this preview.');

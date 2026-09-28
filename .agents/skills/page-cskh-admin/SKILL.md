@@ -74,6 +74,39 @@ node scripts/import-products.mjs --file "/path/products.xlsx" \
 
 - **Always pass `--sheet`** when the workbook has internal sheets (sales, KPIs,
   quotas). Those must never reach the KB.
+- **Group-header rows** (`THỊT BÒ`, `HẢI SẢN`, `HEO`, `TRÂU`, `GÀ`, `Gia Vị`...)
+  sit in the product-name column with an empty `TT`. Importing them raw creates
+  products literally named `HEO`. Filter them out.
+- **Internal columns must never reach the KB**: `Cost`, `Cước`, `Nét`, and the
+  unlabelled margin column (a negative number). The importer has no alias for
+  them, so they drop out — keep it that way.
+- **`Ghi Chú` in a price sheet is usually operational** (`Hết`, `Xả`,
+  `SL liên hệ`, `Chọn giá 69`, `Hỗ trợ cắt`). It goes stale within days and the
+  bot would quote stock states to customers. Keep it out of the KB.
+- **Price cells are bare thousands**: `205` means `205.000đ`. `formatPrice()`
+  multiplies by 1000 and appends `đ`. Verify before trusting: the sheet's own
+  arithmetic must close (`Cost + Cước = Nét`, `Giá Thùng − Nét` = margin column).
+- **Operator price names rarely match KB product names.** A wholesale sheet
+  saying `Ba chỉ bò JBS Diamond CND` is KB's `Ba chỉ bò` brand
+  `Blueribbon (JBS)`. Importing raw turns 27 products into 84 near-duplicates
+  (verified). Always build an explicit name→(product, brand) map and get it
+  approved before applying.
+
+### Price model (three tiers)
+
+`Giá mua dùng` = households. `Giá buôn` = bếp ăn / nhà hàng / khách sạn / quán
+lẩu nướng, split by order size: `Giá < 1 thùng` (under one pack's weight) and
+`Giá Thùng` / `Giá buôn từ 1 thùng trở lên`. Any header containing "thùng" is a
+band column, never the flat wholesale price.
+
+Retail and wholesale prices live in separate fields with **separate unit and
+pack size** (`priceUnitRetail`/`packSizeRetail` vs `priceUnitWholesale`/
+`packSizeWholesale`). They used to share one field and a later retail import
+overwrote the wholesale pack, printing `147/Khay` for a price that was per kg.
+
+A row naming a brand puts the price on that brand only; a row without a brand
+puts it on the product. Brands sharing identical traits and prices still group
+into one line, so one row listing `APK, Miratoc, VLMK` is enough.
 - The Excel reader is python3 **stdlib** (zipfile + ElementTree) and expands
   merged cells. Do **not** install or require `openpyxl`, and `.xls` must be
   re-saved as `.xlsx`.
@@ -143,6 +176,26 @@ venv interpreter or the model id; `handoff_suppressed` means
 `enableHumanHandoff=false`; a Telegram alert that never arrives means the
 notifier is disabled (no token/chat ids) or the flag above is false.
 
+**Bot answers about the wrong product.** `retrieve()` scores keyword hits against
+the query. It used substring matching, so short keywords matched inside unrelated
+words: keyword `Úc` (normalize → `uc`) matched the query `mực ống làm sạch`, every
+Úc-origin product tied with the one actually asked about, and the real document was
+pushed out of the top 5 — the bot answered about ba chỉ bò for a mực ống question.
+Matching is now whole-word (`includesWord` in `src/knowledge.mjs`). If products
+from one origin start crowding answers that mention an unrelated product, suspect
+this class of bug: score a query with a throwaway script against the live
+`knowledge.json` and print the top docs plus which keywords hit.
+
+To score without guessing:
+
+```bash
+node -e '
+import("/srv/page-cskh/app/src/knowledge.mjs").then(({retrieve})=>{
+  for(const q of ["mực ống làm sạch giá bao nhiêu"]) 
+    console.log(q, retrieve("/srv/page-cskh/runtime/knowledge.json", q).map(d=>d.id+"("+(d.score??0)+")").join(", "));
+});'
+```
+
 ## 5. Deploy
 
 Follow `docs/VPS-BUILD.md`. Order matters: setup refuses to run in `mode=live`,
@@ -156,4 +209,13 @@ bên mình có sản phẩm gì?
 trâu thì có những sản phẩm nào?
 ba chỉ bò xuất xứ từ đâu?
 ba chỉ bò làm lẩu chọn loại nào?
+```
+
+After a price change, add these three — they exercise the tier rules (the first
+must return NO price, the other two must return exactly one tier):
+
+```text
+cho anh giá ba chỉ bò          -> phải KHÔNG báo giá, hỏi lại khách mua dùng hay mua buôn
+nhà anh mua về dùng, giá bao nhiêu?   -> chỉ mức giá mua dùng
+bên anh là bếp ăn, lấy 1 thùng, giá bao nhiêu?  -> chỉ giá buôn, mốc từ 1 thùng
 ```
