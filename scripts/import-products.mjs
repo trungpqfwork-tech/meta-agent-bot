@@ -173,6 +173,10 @@ function priceLine(scope) {
     if(scope.priceWholesaleFrom) whole.push(`từ 1 thùng ${formatPrice(scope.priceWholesaleFrom)}${unitW}`);
   } else if(scope.priceWholesale) whole.push(`${formatPrice(scope.priceWholesale)}${unitW}`);
   if(whole.length) parts.push(`giá buôn ${whole.join(', ')}`);
+  // No retail price for a product that has a wholesale price is not missing
+  // data: the operator confirmed those items are wholesale-only. Say so, or the
+  // model reports "no price data" and the conversation is handed off.
+  if(!scope.priceRetail && whole.length) parts.push('chỉ bán buôn, không bán lẻ');
   return parts.length ? `${parts.join('; ')}${until}` : '';
 }
 // Audience-labelled price lines. The document states who each price is for, so
@@ -191,6 +195,10 @@ function productPriceLines(p, indent='') {
   } else if(p.priceWholesale) {
     const pack = p.packSizeWholesale ? ` — quy cách ${p.packSizeWholesale}` : '';
     out.push(`${indent}Giá buôn (bếp ăn, nhà hàng, khách sạn, quán lẩu nướng)${pack}: ${formatPrice(p.priceWholesale)}${unitW}${until}`);
+  }
+  const hasRetail = Boolean(p.priceRetail) || Boolean(p.brands?.some(b => b.priceRetail));
+  if(!hasRetail && hasPrice(p)) {
+    out.push(`${indent}Mặt hàng này chỉ bán buôn theo thùng, không bán lẻ.`);
   }
   return out;
 }
@@ -322,12 +330,22 @@ function contentForProduct(p) {
   if(p.images?.length) lines.push(`Ảnh: ${p.images.join(', ')}`);
   return lines.join('\n');
 }
+// A product name carrying a parenthetical qualifier ("Cá hồi cắt khúc (khúc
+// giữa)") does not match how customers write it ("cá hồi cắt khúc giữa"),
+// because keyword matching is whole-phrase. Emit the plain and inner forms too.
+function nameVariants(name) {
+  const full = String(name ?? '').trim();
+  if(!full) return [];
+  const inner = [...full.matchAll(/\(([^)]+)\)/g)].map(m => m[1].trim()).filter(Boolean);
+  const plain = full.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  return [...new Set([full, plain, ...inner, [plain, ...inner].join(' ')].filter(Boolean))];
+}
 function knowledgeDocForProduct(p) {
   return {
     id: `product-${p.id}`,
     title: p.name,
     keywords: uniq([
-      p.name,
+      ...nameVariants(p.name),
       p.category,
       p.keywords ?? [],
       p.origins ?? [],

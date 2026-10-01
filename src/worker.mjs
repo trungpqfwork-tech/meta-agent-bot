@@ -140,18 +140,23 @@ export class Worker {
       else {
         const history=s.history(j.psid);
         const context=history.filter(x=>x.kind==='customer').slice(-3).map(x=>x.text).join('\n');
-        // Read the order BEFORE retrieving. The products the customer already
-        // showed interest in belong in the search query: a vague follow-up
-        // ("Hi em") matches no product keyword on its own, so retrieval fell
-        // through to the catalog filler and the context held only category
-        // documents with no prices. The bot then correctly said it had no price
-        // data, the answer verifier rejected that as unsupported, and the
-        // conversation was handed off for nothing.
         let order=s.order(j.psid);
+        // Two-pass retrieval. The turn in progress must win: merging the stored
+        // order products into the same query let them outscore the product the
+        // customer was actually asking about, which pushed its document out of
+        // the top 5 and made the bot report "no price data" for a product it
+        // does have. So the current message and context are retrieved first and
+        // keep their slots; the products the customer already opened are only
+        // filler, which is what makes a vague follow-up ("Hi em") keep the thread.
+        const primary=retrieve(c.knowledgeFile,`${context}\n${j.text}`);
         const interest=Array.isArray(order?.products)?order.products.filter(x=>typeof x==='string'&&x.trim()).join(' '):'';
-        const query=`${context}\n${j.text}${interest?`\n${interest}`:''}`;
-        docs=retrieve(c.knowledgeFile,query);
-        const images=retrieveImages(c.imageCatalogFile,query).map(({score,...img})=>img);
+        const secondary=interest?retrieve(c.knowledgeFile,interest):[];
+        // retrieve() already returns up to 8 documents, so the primary pass must
+        // release some slots or the secondary pass is never reached and a vague
+        // message loses the thread again. Keep the five strongest primary hits.
+        const seen=new Set();
+        docs=[...primary.slice(0,5),...secondary].filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;}).slice(0,8);
+        const images=retrieveImages(c.imageCatalogFile,`${context}\n${j.text}`).map(({score,...img})=>img);
         payload={page:{name:c.pageName,scope:c.scopeDescription,topics:c.scopeKeywords},documents:docs.map(({score,...d})=>d),images,history,currentMessage:j.text,order:publicOrder(order)};
         if(asksAboutOrdering(`${context}\n${j.text}`) || order?.status==='collecting') {
           const patch=await this.extractOrder(j,payload);
