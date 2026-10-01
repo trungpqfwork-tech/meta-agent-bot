@@ -16,7 +16,12 @@ stay that way — never route customer messages into this workflow.
 - **Never print, echo, or paste secrets** (`META_*`, `CSKH_ADMIN_TOKEN`,
   `TELEGRAM_BOT_TOKEN`). Read them only inside the scripts that need them; never
   put them in a prompt, a log line, or a chat message. Show lengths, not values.
-- **Ask before restarting** the service. A restart drops in-flight jobs.
+- **Ask before restarting** the service, then restart through
+  `scripts/restart-safe.mjs` — never bare `pm2 restart`. A restart kills the
+  worker mid-job: the job ends as `cancelled` with `ownership_changed`, the
+  customer never gets a reply, and there is **no replay path**. On 2026-10-01 a
+  restart dropped a live customer question ("Cắt khúc thì thế nào em?") exactly
+  this way.
 - **Preview before applying** any KB change, and wait for an explicit approval
   ("apply", "duyệt", "ok cập nhật").
 - **One live sender per Page.** Never start a second instance against the same
@@ -162,6 +167,20 @@ first, never auto-resend. A conversation can sit in `WAITING` for reasons that d
 
 ## 4. Diagnostics
 
+Restarting safely (do this instead of `pm2 restart`):
+
+```bash
+export PATH=$HOME/.hermes/tools/bin:$PATH           # pm2 lives inside the volume
+node scripts/restart-safe.mjs --config "$RUNTIME/config.json"
+node scripts/restart-safe.mjs --config "$RUNTIME/config.json" --dry-run   # check only
+node scripts/restart-safe.mjs --config "$RUNTIME/config.json" --wait 180  # wait longer for a job to drain
+```
+
+It refuses to restart while a job is in flight (waiting up to `--wait`, default
+120s), skips rows older than 10 minutes so a stale row cannot block forever, then
+polls `/status` until the service is back and prints mode/pageId. `--force`
+overrides the gate and **will lose the running job**.
+
 ```bash
 pm2 status                                    # one sender per Page, online
 tail -50 "$RUNTIME/logs/webhook.log"          # GET verify ok / POST ingested / sig_fail
@@ -175,6 +194,30 @@ completion is failing (`agent_error` in the worker log) — usually the Hermes
 venv interpreter or the model id; `handoff_suppressed` means
 `enableHumanHandoff=false`; a Telegram alert that never arrives means the
 notifier is disabled (no token/chat ids) or the flag above is false.
+
+**Replies land on the handoff text (`Em chuyển nhân viên hỗ trợ tiếp nhận nhé`).**
+The worker runs a second model call that reviews the draft reply
+(`ANSWER_CHECK_PROMPT`) and hands off when it returns `supported=false`, which
+means the draft stated a business fact the supplied documents do not back. It is
+**not** a retrieval crash — read `verify_fail` in the worker log, which now
+records the rejected text in `answer=...`. Diagnose in this order:
+
+1. Does the context for that turn actually contain the document with the fact?
+   Rebuild the query the worker used (`last 3 customer messages + current message
+   + order products`) and run `retrieve()` on it. If the price/brand/policy
+   document is missing, the model was asked to answer without evidence.
+2. A short or vague message (`Hi em`, `ok`, `còn gì nữa`) matches no product
+   keyword on its own. Retrieval used to fall through to the catalog filler and
+   return only `category-*` documents — names without prices — so the bot said
+   "em chưa có dữ liệu giá" and the reviewer rejected it. Fixed by including
+   `payload.order.products` in the query in `src/worker.mjs`.
+3. Facts that live in `policy-*` documents (VAT, shipping) can be stated in a
+   turn where no keyword matches them, so `retrieve()` now pins policy documents
+   into every context.
+4. A handoff parks the conversation in `WAITING` for `waitingResetSeconds`
+   (300s), then `auto_reset_waiting` returns it to `BOT`. Any customer message
+   arriving inside that window is `cancelled` and **never answered** — check
+   `jobs` for `cancelled` rows before blaming the model.
 
 **Bot answers about the wrong product.** `retrieve()` scores keyword hits against
 the query. It used substring matching, so short keywords matched inside unrelated
