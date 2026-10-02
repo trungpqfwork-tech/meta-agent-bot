@@ -52,7 +52,7 @@ export function createPageCskhService({
         httpServer=createServer((req,res)=>handler(req,res));
         await new Promise((resolve,reject)=>{
           httpServer.once('error',reject);
-          httpServer.listen(config.edgePort,'127.0.0.1',()=>{httpServer.off('error',reject);resolve();});
+          httpServer.listen(config.edgePort,'0.0.0.0',()=>{httpServer.off('error',reject);resolve();});
         });
       }
       worker.start(e=>logger.error?.(`page-cskh worker failed: ${e?.message??e}`));
