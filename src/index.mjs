@@ -28,7 +28,7 @@ export default definePluginEntry({
         const notifier=telegramNotifier(c,secrets);
         if(c.mode==='live') await meta.probe();
         try {
-          store=new Store(c.database,c.pageId);
+          store=new Store(c.database,c.pageId,{sessionTtlSeconds:c.sessionTtlSeconds});
           worker=new Worker(c,store,openClawCompletion(api),meta,notifier);
           admin=await startAdmin(c,secrets,store);
           handler=makeWebhook(c,secrets,store);

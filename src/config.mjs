@@ -16,6 +16,11 @@ export function loadConfig(file) {
   assert(['draft','live'].includes(c.mode), 'mode must be draft or live');
   c.waitingResetSeconds ??= 0;
   c.messageDebounceSeconds ??= 2;
+  // Conversation session TTL: a customer message that arrives more than this
+  // many seconds after the previous one starts a NEW session (topic is reset,
+  // the finished session is queued for summarisation). 0 keeps one session
+  // forever, which is the old behaviour.
+  c.sessionTtlSeconds ??= 21600;
   c.enableHumanHandoff ??= true;
   assert(/^\/webhooks\/[a-z0-9/-]+$/.test(c.webhookPath), 'Invalid webhookPath');
   const u = new URL(c.publicWebhookUrl);
@@ -28,6 +33,7 @@ export function loadConfig(file) {
   assert(Array.isArray(c.orderTelegramChatIds) && c.orderTelegramChatIds.every(x => typeof x === 'string' && x.trim()), 'Invalid orderTelegramChatIds');
   for (const k of ['maxDailyAgentCalls','maxCustomerCallsPerHour','agentTimeoutMs']) assert(Number.isInteger(c[k]) && c[k] > 0, `Invalid ${k}`);
   assert(Number.isInteger(c.waitingResetSeconds) && c.waitingResetSeconds >= 0, 'Invalid waitingResetSeconds');
+  assert(Number.isInteger(c.sessionTtlSeconds) && c.sessionTtlSeconds >= 0 && c.sessionTtlSeconds <= 604800, 'Invalid sessionTtlSeconds');
   assert(Number.isInteger(c.messageDebounceSeconds) && c.messageDebounceSeconds >= 0 && c.messageDebounceSeconds <= 60, 'Invalid messageDebounceSeconds');
   assert(typeof c.enableHumanHandoff === 'boolean', 'Invalid enableHumanHandoff');
   assert(c.agentTimeoutMs <= 120000, 'agentTimeoutMs must be <= 120000');
@@ -113,6 +119,7 @@ export function runtimeConfigFromEnv(env) {
     orderTelegramChatIds: envJsonArray(env, 'PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS', '[]'),
     mode,
     waitingResetSeconds: envInt(env, 'PAGE_CSKH_WAITING_RESET_SECONDS', 0),
+    sessionTtlSeconds: envInt(env, 'PAGE_CSKH_SESSION_TTL_SECONDS', 21600),
     messageDebounceSeconds: envInt(env, 'PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS', 2),
     enableHumanHandoff,
     scopeDescription: envText(env, 'PAGE_CSKH_SCOPE_DESCRIPTION', 'Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.'),
@@ -136,6 +143,11 @@ export function applyEnvOverrides(config, env) {
     const n = Number(env.PAGE_CSKH_WAITING_RESET_SECONDS);
     assert(Number.isInteger(n) && n >= 0, 'PAGE_CSKH_WAITING_RESET_SECONDS must be an integer >= 0');
     c.waitingResetSeconds = n;
+  }
+  if (env.PAGE_CSKH_SESSION_TTL_SECONDS) {
+    const n = Number(env.PAGE_CSKH_SESSION_TTL_SECONDS);
+    assert(Number.isInteger(n) && n >= 0 && n <= 604800, 'PAGE_CSKH_SESSION_TTL_SECONDS must be an integer from 0..604800');
+    c.sessionTtlSeconds = n;
   }
   if (env.PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS) {
     const n = Number(env.PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS);

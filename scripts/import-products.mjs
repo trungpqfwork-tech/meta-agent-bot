@@ -226,7 +226,7 @@ function productFromRow(row, meta={}) {
   const traits = uniq([val(row, ['Đặc tính','Mô tả','Đặc điểm','Traits','Description'])]);
   const useCases = uniq([val(row, ['Công dụng','Món phù hợp','Ứng dụng','Dùng cho','Use case','Best for'])]);
   const origins = uniq([val(row, ['Xuất xứ','Origin','Nguồn gốc'])]).map(cleanupValue).filter(Boolean);
-  const notes = uniq([val(row, ['Ghi chú','Lưu ý','Note','Notes'])]).map(cleanupValue).filter(Boolean);
+  const notes = [val(row, ['Ghi chú','Lưu ý','Note','Notes'])].map(cleanupValue).filter(Boolean);
   const brandNames = uniq([brand]).map(cleanupValue).filter(Boolean);
   const prices = priceFromRow(row);
   // When the row names a brand, the price belongs to that brand only — putting it
@@ -285,10 +285,20 @@ function mergeProduct(existing, incoming) {
   return {
     ...existing,
     ...incoming,
+    // An empty cell in the incoming row must never erase what was imported
+    // before: a sheet without a "Nhóm" column used to blank the category of
+    // products that already had one, which also dropped them out of their
+    // category document.
+    name: incoming.name || existing.name,
+    category: incoming.category || existing.category || '',
+    traits: uniq([existing.traits ?? [], incoming.traits ?? []]),
     origins: uniq([existing.origins ?? [], incoming.origins ?? []]),
     brands,
     useCases: uniq([existing.useCases ?? [], incoming.useCases ?? []]),
-    notes: uniq([existing.notes ?? [], incoming.notes ?? []]),
+    // Notes are prose, not a keyword list: keep each note intact instead of
+    // splitting it on commas and semicolons, which shredded operator notes into
+    // fragments like "loại 1 thái dày; thái mỏng 140.000đ; khay 500gr".
+    notes: [...new Set([...(existing.notes ?? []), ...(incoming.notes ?? [])])],
     keywords: uniq([existing.keywords ?? [], incoming.keywords ?? []]),
     images: uniq([existing.images ?? [], incoming.images ?? []]),
     priceRetail: incoming.priceRetail || existing.priceRetail || '',
@@ -338,7 +348,24 @@ function nameVariants(name) {
   if(!full) return [];
   const inner = [...full.matchAll(/\(([^)]+)\)/g)].map(m => m[1].trim()).filter(Boolean);
   const plain = full.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-  return [...new Set([full, plain, ...inner, [plain, ...inner].join(' ')].filter(Boolean))];
+  const out = [full, plain, ...inner, [plain, ...inner].join(' ')];
+  // Customers drop the trailing category noun: they ask about "sụn non", not
+  // "Sụn non heo". Without this variant the product document scores too low,
+  // falls out of the top 5, and the bot answers from the category document —
+  // which lists the item but carries no origin or price.
+  const trimmed = plain.replace(/\s+(heo|bò|trâu|gà|cá)$/i, '').trim();
+  if(trimmed && trimmed.split(/\s+/).length >= 2) out.push(trimmed);
+  // Customers use a shortened name: "tôm thẻ", "mực ống", "khoanh giò", "má heo"
+  // for "Tôm thẻ hấp size 25", "Mực ống làm sạch", "Khoanh giò trước", "Má heo
+  // không da". Emit every leading word-prefix, otherwise the document scores
+  // zero, the answer comes from a category document, and the bot reports that it
+  // has no origin or price for an item it does hold.
+  const words = plain.split(/\s+/);
+  for(let i = 2; i < words.length; i++) out.push(words.slice(0, i).join(' '));
+  // Two-word names ("Dải heo", "Tim heo", "Gù hoa") are asked about by their
+  // distinctive first word alone.
+  if(words.length === 2 && words[0].length >= 3) out.push(words[0]);
+  return [...new Set(out.filter(Boolean))];
 }
 function knowledgeDocForProduct(p) {
   return {

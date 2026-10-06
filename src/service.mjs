@@ -43,7 +43,7 @@ export function createPageCskhService({
           logger.warn?.(`Meta probe skipped: ${e.message}`);
         }
       }
-      store=new Store(config.database,config.pageId);
+      store=new Store(config.database,config.pageId,{sessionTtlSeconds:config.sessionTtlSeconds});
       complete ??= createHermesCompletion({model:config.model,hermesHome:config.hermesHome});
       worker=new Worker(config,store,complete,pageMeta,orderNotifier);
       handler=makeWebhook(config,secrets,store);

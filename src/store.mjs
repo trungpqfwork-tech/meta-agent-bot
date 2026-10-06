@@ -5,8 +5,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { assert } from './config.mjs';
 
 export class Store {
-  constructor(file, pageId) {
-    this.pageId = pageId; this.lock = `${file}.lock`;
+  constructor(file, pageId, { sessionTtlSeconds = 21600 } = {}) {
+    this.pageId = pageId;
+    this.sessionTtlSeconds = Number.isInteger(sessionTtlSeconds) && sessionTtlSeconds >= 0 ? sessionTtlSeconds : 21600;
+    this.lock = `${file}.lock`;
     mkdirSync(dirname(file), {recursive:true,mode:0o700});
     try { writeFileSync(this.lock, String(process.pid), {flag:'wx',mode:0o600}); }
     catch (e) {
@@ -33,6 +35,20 @@ export class Store {
         CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(status,created);`);
       const owner = this.db.prepare('SELECT value FROM meta WHERE key=?').get('pageId');
       this.ensureColumn('orders','notified_at','INTEGER NOT NULL DEFAULT 0');
+      // Session segmentation + per-customer topic/summary. ADD COLUMN preserves
+      // every existing row, so old customer history is never dropped.
+      for (const [column, definition] of [
+        ['session_id', "TEXT NOT NULL DEFAULT ''"],
+        ['session_started', 'INTEGER NOT NULL DEFAULT 0'],
+        ['topic', "TEXT NOT NULL DEFAULT ''"],
+        ['topic_at', 'INTEGER NOT NULL DEFAULT 0'],
+        ['summary', "TEXT NOT NULL DEFAULT ''"],
+        ['summary_at', 'INTEGER NOT NULL DEFAULT 0'],
+        ['summary_pending', 'INTEGER NOT NULL DEFAULT 0']
+      ]) this.ensureColumn('conversations', column, definition);
+      this.ensureColumn('events', 'session_id', "TEXT NOT NULL DEFAULT ''");
+      this.ensureColumn('jobs', 'attempts', 'INTEGER NOT NULL DEFAULT 0');
+      this.backfillSessions();
       assert(!owner || owner.value === pageId, 'Database belongs to another Page');
       this.db.prepare('INSERT OR IGNORE INTO meta VALUES (?,?)').run('pageId',pageId);
       this.db.prepare('INSERT OR IGNORE INTO meta VALUES (?,?)').run('schemaVersion','1');
@@ -44,6 +60,50 @@ export class Store {
       }
       this.db.exec("UPDATE outbox SET status='unknown' WHERE status='sending'");
     } catch(e) { this.db?.close(); unlinkSync(this.lock); throw e; }
+  }
+  // A customer message that lands more than sessionTtlSeconds after the previous
+  // one starts a new session: the topic is cleared and the finished session is
+  // queued for summarisation so nothing is forgotten, it is only compacted.
+  sessionForIncoming(previous,event,kind) {
+    const current=previous?.session_id || '';
+    if(kind!=='customer') return current;
+    const ttlMs=Math.max(0,Math.trunc(this.sessionTtlSeconds))*1000;
+    const lastCustomer=Number(previous?.last_customer ?? 0);
+    const rollover=!current || (ttlMs>0 && lastCustomer>0 && event.at-lastCustomer>ttlMs);
+    if(!rollover) return current;
+    const sessionId=`${event.psid}|${event.at}`;
+    this.db.prepare("UPDATE conversations SET session_id=?,session_started=?,topic='',topic_at=0,summary_pending=? WHERE psid=?")
+      .run(sessionId,event.at,current?1:0,event.psid);
+    if(current) this.audit(event.psid,'session_closed',`session_ttl:${this.sessionTtlSeconds}s`);
+    return sessionId;
+  }
+  // Legacy rows have no session_id; assign them by the same TTL rule so old
+  // conversations can be split without losing a single event.
+  backfillSessions() {
+    const missing=this.db.prepare("SELECT COUNT(*) AS n FROM events WHERE session_id=''").get().n;
+    if(!missing) return 0;
+    const ttlMs=Math.max(0,Math.trunc(this.sessionTtlSeconds))*1000;
+    let assigned=0;
+    this.tx(()=> {
+      for(const {psid} of this.db.prepare("SELECT DISTINCT psid FROM events WHERE session_id=''").all()) {
+        const rows=this.db.prepare("SELECT id,at FROM events WHERE psid=? ORDER BY at,rowid").all(psid);
+        let sessionId='', started=0, previous=0;
+        for(const row of rows) {
+          if(!sessionId || (ttlMs>0 && previous>0 && row.at-previous>ttlMs)) { sessionId=`${psid}|${row.at}`; started=row.at; }
+          previous=row.at;
+          const r=this.db.prepare("UPDATE events SET session_id=? WHERE id=? AND session_id=''").run(sessionId,row.id);
+          assigned+=Number(r.changes ?? 0);
+        }
+        if(sessionId) this.db.prepare('UPDATE conversations SET session_id=?,session_started=? WHERE psid=? AND (session_id IS NULL OR session_id=?)').run(sessionId,started,psid,'');
+        // More than one session means earlier sessions exist outside the current
+        // context: queue them for compaction so the history is summarised once.
+        const sessions=this.db.prepare("SELECT COUNT(DISTINCT session_id) AS n FROM events WHERE psid=? AND session_id<>''").get(psid).n;
+        const c=this.conversation(psid);
+        if(sessions>1 && Number(c?.summary_at ?? 0) < started) this.db.prepare('UPDATE conversations SET summary_pending=1 WHERE psid=?').run(psid);
+      }
+      return assigned;
+    });
+    return assigned;
   }
   ensureColumn(table,column,definition) {
     const exists = this.db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
@@ -95,7 +155,9 @@ export class Store {
           const sent=this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND psid=?').get(e.mid,e.psid);
           kind=sent ? 'bot_echo' : 'page_external';
         }
-        this.db.prepare('INSERT INTO events VALUES (?,?,?,?,?)').run(id,e.psid,kind,e.text,e.at);
+        const previous=this.conversation(e.psid);
+        const sessionId=this.sessionForIncoming(previous,e,kind);
+        this.db.prepare('INSERT INTO events(id,psid,kind,text,at,session_id) VALUES (?,?,?,?,?,?)').run(id,e.psid,kind,e.text,e.at,sessionId);
         if(kind==='page_external') { this.hold(e.psid,'HUMAN','external_page_message'); continue; }
         if(kind!=='customer') continue;
         this.db.prepare('UPDATE conversations SET last_customer=MAX(last_customer,?) WHERE psid=?').run(Math.min(e.at,Date.now()),e.psid);
@@ -129,7 +191,57 @@ export class Store {
     return !!this.db.prepare("SELECT 1 FROM events WHERE psid=? AND kind='customer' AND at>? AND id<>? LIMIT 1").get(j.psid,current.at,j.event_id);
   }
   finish(id,status,reason='') { this.db.prepare('UPDATE jobs SET status=?,reason=? WHERE id=?').run(status,reason,id); }
+  // Lỗi hạ tầng (timeout / Hermes completion failed) không phải quyết định nghiệp
+  // vụ: đưa job về hàng đợi kèm backoff thay vì handoff, có trần để không lặp vô hạn.
+  requeue(id,delayMs=60000,reason='infra_retry',maxAttempts=2) {
+    const j=this.db.prepare('SELECT id,psid,attempts FROM jobs WHERE id=?').get(id);
+    if(!j) return false;
+    const attempts=Number(j.attempts ?? 0)+1;
+    if(attempts>maxAttempts) return false;
+    this.db.prepare("UPDATE jobs SET status='pending',created=?,attempts=?,reason=? WHERE id=?")
+      .run(Date.now()+Math.max(0,delayMs),attempts,reason,id);
+    this.audit(j.psid,'job_requeue',`${id}:${reason}:attempt${attempts}`);
+    return true;
+  }
   history(psid) { return this.db.prepare("SELECT kind,text,at FROM events WHERE psid=? AND kind!='bot_echo' ORDER BY at DESC,rowid DESC LIMIT 16").all(psid).reverse(); }
+  currentSessionId(psid) { return this.conversation(psid)?.session_id || ''; }
+  // Only the messages of the current session go to the model verbatim; earlier
+  // sessions are represented by the compaction summary instead.
+  historyInSession(psid,sessionId=null,limit=16) {
+    const sid=sessionId ?? this.currentSessionId(psid);
+    if(!sid) return this.history(psid);
+    return this.db.prepare("SELECT kind,text,at FROM events WHERE psid=? AND session_id=? AND kind!='bot_echo' ORDER BY at DESC,rowid DESC LIMIT ?").all(psid,sid,limit).reverse();
+  }
+  session(psid) {
+    const c=this.conversation(psid);
+    if(!c) return null;
+    let topic=null;
+    try { topic=c.topic ? JSON.parse(c.topic) : null; } catch { topic=null; }
+    return {
+      psid,
+      sessionId:c.session_id || '',
+      sessionStarted:c.session_started || 0,
+      topic,
+      topicAt:c.topic_at || 0,
+      summary:c.summary || '',
+      summaryAt:c.summary_at || 0,
+      summaryPending:Boolean(c.summary_pending)
+    };
+  }
+  saveTopic(psid,topic,at=Date.now()) {
+    assert(this.conversation(psid),'Unknown conversation');
+    this.db.prepare('UPDATE conversations SET topic=?,topic_at=? WHERE psid=?').run(JSON.stringify(topic??{}).slice(0,4000),at,psid);
+    return this.session(psid);
+  }
+  saveSummary(psid,summary,upToAt=Date.now()) {
+    assert(this.conversation(psid),'Unknown conversation');
+    this.db.prepare('UPDATE conversations SET summary=?,summary_at=?,summary_pending=0 WHERE psid=?').run(String(summary??'').slice(0,4000),upToAt,psid);
+    this.audit(psid,'summary_saved',String(upToAt));
+    return this.session(psid);
+  }
+  summaryQueue(limit=10) {
+    return this.db.prepare('SELECT psid,session_id,summary,summary_at,last_customer FROM conversations WHERE summary_pending=1 ORDER BY last_customer LIMIT ?').all(limit);
+  }
   order(psid) {
     const o=this.db.prepare('SELECT * FROM orders WHERE psid=?').get(psid);
     if(!o) return null;
@@ -204,7 +316,7 @@ export class Store {
     this.tx(()=> {
       this.db.prepare("UPDATE outbox SET status='sent',mid=? WHERE job_id=?").run(mid,j.id);
       this.finish(j.id,'sent');
-      this.db.prepare('INSERT OR IGNORE INTO events VALUES (?,?,?,?,?)').run(`${this.pageId}:sent:${mid}`,j.psid,'bot',text,Date.now());
+      this.db.prepare('INSERT OR IGNORE INTO events(id,psid,kind,text,at,session_id) VALUES (?,?,?,?,?,?)').run(`${this.pageId}:sent:${mid}`,j.psid,'bot',text,Date.now(),this.currentSessionId(j.psid));
       this.audit(j.psid,'sent',j.id);
     });
   }
@@ -213,7 +325,7 @@ export class Store {
     assert(o,'No ambiguous send for job');
     this.db.prepare('UPDATE outbox SET status=? WHERE job_id=?').run(delivered?'confirmed_sent':'confirmed_not_sent',jobId);
     this.audit(o.psid,'operator_reconcile',`${jobId}:${delivered}`);
-    if(delivered) this.db.prepare('INSERT OR IGNORE INTO events VALUES (?,?,?,?,?)').run(`reconciled:${jobId}`,o.psid,'bot',o.text,Date.now());
+    if(delivered) this.db.prepare('INSERT OR IGNORE INTO events(id,psid,kind,text,at,session_id) VALUES (?,?,?,?,?,?)').run(`reconciled:${jobId}`,o.psid,'bot',o.text,Date.now(),this.currentSessionId(o.psid));
   }
   snapshot() {
     return { pageId:this.pageId, conversations:this.db.prepare('SELECT * FROM conversations ORDER BY last_customer DESC LIMIT 200').all(),
