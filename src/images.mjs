@@ -1,6 +1,39 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { basename, resolve as resolvePath } from 'node:path';
 import { assert } from './config.mjs';
 import { normalize } from './knowledge.mjs';
+
+// Which file backs an approved catalog record. Only the basename is used: the
+// path comes from imported data, and a crawled/edited catalog entry must never
+// be able to point the sender at a file outside runtime/images.
+export function imageFilePath(runtimeDir, img) {
+  const name = basename(String(img?.file ?? '').trim());
+  if(!name || name.startsWith('.')) return null;
+  return resolvePath(runtimeDir, 'images', name);
+}
+
+// Meta wants an attachment_id per sent image. Uploading on every reply would be
+// slow and rate-limited, so the id is cached next to the catalog (a sidecar, so
+// the importer's own writes to catalog.json never race with it).
+export function attachmentCacheFile(runtimeDir) {
+  return resolvePath(runtimeDir, 'images', 'attachments.json');
+}
+export function loadAttachmentCache(runtimeDir) {
+  const file = attachmentCacheFile(runtimeDir);
+  if(!existsSync(file)) return {};
+  try {
+    const data = JSON.parse(readFileSync(file, 'utf8'));
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+export function saveAttachmentCache(runtimeDir, cache) {
+  const file = attachmentCacheFile(runtimeDir);
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, JSON.stringify(cache, null, 2), { mode: 0o600 });
+  renameSync(tmp, file);
+}
 
 export function loadImageCatalog(file) {
   if(!existsSync(file)) return [];

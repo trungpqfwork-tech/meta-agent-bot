@@ -31,6 +31,13 @@ const CASES = [
   ['Chị lấy buôn về bán lại', 'store'],
   ['Anh mua ba chỉ bò về ăn', 'personal'],
   ['Nhà anh liên hoan cuối tuần', 'personal'],
+  // Số lượng / mua nguyên con không quyết định nhóm khách — chỉ mục đích.
+  ['Anh mua 1 con cá hồi nguyên con về ăn', 'personal'],
+  ['Gia đình anh lấy nguyên con cá hồi', 'personal'],
+  ['Anh mua nguyên con cá hồi về liên hoan', 'personal'],
+  ['Anh lấy nguyên con cá hồi giá sao?', null],
+  ['Cá hồi nguyên con giá bao nhiêu?', null],
+  ['Nhà hàng anh lấy 1 con cá hồi nguyên con', 'store'],
   ['Ba chỉ bò giá bao nhiêu?', null],
 ];
 
