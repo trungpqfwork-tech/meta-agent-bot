@@ -1,5 +1,5 @@
 import { retrieve, agentPolicy, answerFormatPolicy, parseModelJson, validateAnswer, loadKnowledge, normalize } from './knowledge.mjs';
-import { retrieveImages, imageFilePath, loadAttachmentCache, saveAttachmentCache } from './images.mjs';
+import { retrieveImages, imageFilePath, publicImageUrl, loadAttachmentCache, saveAttachmentCache } from './images.mjs';
 import { appendFileSync,mkdirSync,existsSync } from 'node:fs';
 import { dirname,resolve } from 'node:path';
 
@@ -111,7 +111,14 @@ export class Worker {
     const runtimeDir=dirname(this.config.knowledgeFile);
     for(const img of picks) {
       try {
-        const payload=img.url ? {url:img.url} : {attachment_id:await this.attachmentIdFor(runtimeDir,img)};
+        // Ảnh trỏ tới file trong runtime/images thì file phải có thật: gửi URL hỏng
+        // cho khách còn tệ hơn là bỏ qua. Bản ghi chỉ có url ngoài thì gửi thẳng.
+        const filePath=img.file ? imageFilePath(runtimeDir,img) : null;
+        if(img.file && (!filePath || !existsSync(filePath))) throw new Error('image file missing');
+        // Ưu tiên URL công khai (edge phục vụ /images/<file>): API tải ảnh lên Meta
+        // hiện trả 400 (#-1) nên attachment_id chỉ còn là đường dự phòng.
+        const url=img.url ?? publicImageUrl(this.config.publicWebhookUrl,img);
+        const payload=url ? {url} : {attachment_id:await this.attachmentIdFor(runtimeDir,img)};
         const mid=await this.meta.sendImage(j.psid,payload);
         log(this.logFile,`process image_sent psid=${j.psid} job=${j.id} image=${img.id} mid=${mid??'none'}`);
         this.store.audit(j.psid,'image_sent',`${j.id}:${img.id}`);
@@ -474,6 +481,8 @@ export class Worker {
     try {
       const reset=this.store.autoResumeExpiredWaiting(this.config.waitingResetSeconds);
       if(reset) log(this.logFile,`auto_reset_waiting count=${reset} seconds=${this.config.waitingResetSeconds}`);
+      const human=this.store.autoResumeIdleHuman(this.config.humanIdleResetSeconds);
+      if(human) log(this.logFile,`auto_reset_human_idle count=${human} seconds=${this.config.humanIdleResetSeconds}`);
       const j=this.store.next();
       if(j) { await this.process(j); return; }
       if(this.lastCompact && Date.now()-this.lastCompact<COMPACT_EVERY_MS) return;

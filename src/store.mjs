@@ -142,6 +142,35 @@ export class Store {
       return rows.length;
     });
   }
+  // Nhân viên đã trả lời trực tiếp trên Page thì bot im lặng. Nếu nhân viên im lặng
+  // một khoảng (humanIdleResetSeconds) thì bot tiếp tục trả lời khách đó — nhưng
+  // CHỈ với hội thoại do nhân viên nhắn (external_page_message). Hội thoại bị
+  // operator_takeover là do người vận hành cố ý giữ, không được tự bật lại.
+  autoResumeIdleHuman(seconds) {
+    if(!Number.isInteger(seconds) || seconds <= 0) return 0;
+    const cutoff=Date.now()-seconds*1000;
+    return this.tx(()=> {
+      const rows=this.db.prepare(`
+        SELECT c.psid
+        FROM conversations c
+        JOIN (
+          SELECT psid,detail,MAX(at) AS human_at
+          FROM audit
+          WHERE action='HUMAN'
+          GROUP BY psid
+        ) h ON h.psid=c.psid
+        WHERE c.state='HUMAN'
+          AND h.human_at<?
+          AND h.detail='external_page_message'
+          AND NOT EXISTS (
+            SELECT 1 FROM outbox o
+            WHERE o.psid=c.psid AND o.status IN ('sending','unknown')
+          )
+      `).all(cutoff);
+      for(const r of rows) this.hold(r.psid,'BOT','auto_human_idle_reset');
+      return rows.length;
+    });
+  }
   ingest(events, config={}) {
     return this.tx(()=> {
       let accepted=0;

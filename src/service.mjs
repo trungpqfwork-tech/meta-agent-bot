@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
-import { realpathSync } from 'node:fs';
+import { realpathSync, createReadStream, existsSync, statSync } from 'node:fs';
+import { basename, extname, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig,loadSecrets,applyEnvOverrides } from './config.mjs';
 import { Store } from './store.mjs';
@@ -10,6 +11,30 @@ import { telegramNotifier } from './telegram.mjs';
 import { startAdmin } from './admin.mjs';
 import { loadKnowledge } from './knowledge.mjs';
 import { createHermesCompletion } from './hermes.mjs';
+import { approvedImageNames } from './images.mjs';
+
+const IMAGE_TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
+// Meta tải ảnh về theo URL công khai, nên edge phải phục vụ được /images/<tên file>.
+// Chỉ những file nằm trong bản ghi ĐÃ DUYỆT mới được trả về: route này không cho
+// phép dò file trong runtime. Không có route này thì phải tải ảnh lên Meta, mà API
+// tải lên (/message_attachments) hiện trả 400 (#-1) nên không dùng được.
+export function servePublicImage(config,req,res){
+  if(req.method!=='GET' && req.method!=='HEAD') return false;
+  let pathname;
+  try { pathname=new URL(req.url,'http://localhost').pathname; } catch { return false; }
+  if(!pathname.startsWith('/images/')) return false;
+  const name=basename(decodeURIComponent(pathname.slice('/images/'.length)));
+  const type=IMAGE_TYPES[extname(name).toLowerCase()];
+  if(!name || name.startsWith('.') || !type) { res.writeHead(404,{'Content-Type':'text/plain'}).end('Not found'); return true; }
+  let allowed=false;
+  try { allowed=approvedImageNames(config.imageCatalogFile).has(name); } catch { allowed=false; }
+  const file=join(dirname(config.imageCatalogFile),name);
+  if(!allowed || !existsSync(file)) { res.writeHead(404,{'Content-Type':'text/plain'}).end('Not found'); return true; }
+  res.writeHead(200,{'Content-Type':type,'Content-Length':statSync(file).size,'Cache-Control':'public, max-age=86400'});
+  if(req.method==='HEAD') { res.end(); return true; }
+  createReadStream(file).on('error',()=>res.destroy()).pipe(res);
+  return true;
+}
 
 export function createPageCskhService({
   configFile,
@@ -49,7 +74,10 @@ export function createPageCskhService({
       handler=makeWebhook(config,secrets,store);
       if(shouldStartAdmin) adminServer=await startAdmin(config,secrets,store);
       if(startHttp) {
-        httpServer=createServer((req,res)=>handler(req,res));
+        httpServer=createServer((req,res)=>{
+          if(servePublicImage(config,req,res)) return;
+          handler(req,res);
+        });
         await new Promise((resolve,reject)=>{
           httpServer.once('error',reject);
           httpServer.listen(config.edgePort,'0.0.0.0',()=>{httpServer.off('error',reject);resolve();});

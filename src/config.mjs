@@ -16,6 +16,9 @@ export function loadConfig(file) {
   assert(['draft','live'].includes(c.mode), 'mode must be draft or live');
   c.waitingResetSeconds ??= 0;
   c.messageDebounceSeconds ??= 2;
+  // Khi nhân viên trả lời trực tiếp trên Page, bot im lặng (trạng thái HUMAN). Nếu
+  // nhân viên không nhắn gì thêm trong khoảng này thì bot tiếp tục trả lời khách.
+  c.humanIdleResetSeconds ??= 300;
   // Conversation session TTL: a customer message that arrives more than this
   // many seconds after the previous one starts a NEW session (topic is reset,
   // the finished session is queued for summarisation). 0 keeps one session
@@ -33,6 +36,7 @@ export function loadConfig(file) {
   assert(Array.isArray(c.orderTelegramChatIds) && c.orderTelegramChatIds.every(x => typeof x === 'string' && x.trim()), 'Invalid orderTelegramChatIds');
   for (const k of ['maxDailyAgentCalls','maxCustomerCallsPerHour','agentTimeoutMs']) assert(Number.isInteger(c[k]) && c[k] > 0, `Invalid ${k}`);
   assert(Number.isInteger(c.waitingResetSeconds) && c.waitingResetSeconds >= 0, 'Invalid waitingResetSeconds');
+  assert(Number.isInteger(c.humanIdleResetSeconds) && c.humanIdleResetSeconds >= 0 && c.humanIdleResetSeconds <= 86400, 'Invalid humanIdleResetSeconds');
   assert(Number.isInteger(c.sessionTtlSeconds) && c.sessionTtlSeconds >= 0 && c.sessionTtlSeconds <= 604800, 'Invalid sessionTtlSeconds');
   assert(Number.isInteger(c.messageDebounceSeconds) && c.messageDebounceSeconds >= 0 && c.messageDebounceSeconds <= 60, 'Invalid messageDebounceSeconds');
   assert(typeof c.enableHumanHandoff === 'boolean', 'Invalid enableHumanHandoff');
@@ -121,6 +125,7 @@ export function runtimeConfigFromEnv(env) {
     waitingResetSeconds: envInt(env, 'PAGE_CSKH_WAITING_RESET_SECONDS', 0),
     sessionTtlSeconds: envInt(env, 'PAGE_CSKH_SESSION_TTL_SECONDS', 21600),
     messageDebounceSeconds: envInt(env, 'PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS', 2),
+    humanIdleResetSeconds: envInt(env, 'PAGE_CSKH_HUMAN_IDLE_RESET_SECONDS', 300),
     enableHumanHandoff,
     scopeDescription: envText(env, 'PAGE_CSKH_SCOPE_DESCRIPTION', 'Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.'),
     scopeKeywords: envCsv(env, 'PAGE_CSKH_SCOPE_KEYWORDS', 'đặt hàng,giá,sản phẩm,chính sách'),
@@ -143,6 +148,11 @@ export function applyEnvOverrides(config, env) {
     const n = Number(env.PAGE_CSKH_WAITING_RESET_SECONDS);
     assert(Number.isInteger(n) && n >= 0, 'PAGE_CSKH_WAITING_RESET_SECONDS must be an integer >= 0');
     c.waitingResetSeconds = n;
+  }
+  if (env.PAGE_CSKH_HUMAN_IDLE_RESET_SECONDS) {
+    const n = Number(env.PAGE_CSKH_HUMAN_IDLE_RESET_SECONDS);
+    assert(Number.isInteger(n) && n >= 0 && n <= 86400, 'PAGE_CSKH_HUMAN_IDLE_RESET_SECONDS must be an integer from 0..86400');
+    c.humanIdleResetSeconds = n;
   }
   if (env.PAGE_CSKH_SESSION_TTL_SECONDS) {
     const n = Number(env.PAGE_CSKH_SESSION_TTL_SECONDS);

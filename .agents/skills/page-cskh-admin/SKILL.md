@@ -182,6 +182,59 @@ into one line, so one row listing `APK, Miratoc, VLMK` is enough.
 - Report a diff summary (added/updated/removed) and 3-4 smoke questions after
   applying. Do not silently delete products that the new file omits.
 
+### Product photos (runtime/images)
+
+The bot can send photos, but only ones the operator approved and only to the
+recipient stored on the job. Flow: `retrieveImages()` matches the customer's
+words against `keywords`, the model picks ids into `imageIds`, and the worker
+sends them **after** the text (max 5 per reply). Adding a photo is a pure runtime
+change — no restart.
+
+**Photos go out by public URL, not by upload.** Meta's attachment upload
+(`POST /{page-id}/message_attachments`) fails with `HTTP 400 (#-1) Unexpected
+internal error`, `error_subcode 2018012` — on every Graph version tried (v19 →
+v25, `/page-id/` and `/me/`), with a valid PAGE token that has `pages_messaging`.
+So `sendImages()` builds `${origin}/images/<file>` from `publicWebhookUrl`
+(https only) and sends `{url}`. The edge serves that route via
+`servePublicImage()` (`src/service.mjs`) and only hands back files that appear in
+an **approved** catalog record — unapproved files 404, traversal 403. Verify:
+
+```bash
+curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}\n' \
+  "https://<public-host>/images/<approved-file>.jpg"   # expect 200 image/jpeg
+```
+
+`uploadAttachment()` is kept as a fallback for hosts with no public HTTPS origin,
+but it returns 400 against Meta today — do not "fix" a missing photo by reaching
+for it first.
+
+To add photos for a product:
+
+1. Drop the files in `runtime/images/` (`<slug>-1.jpg`, ...) and keep each one
+   under 8 MB.
+2. Add one catalog record per file to `runtime/images/catalog.json`:
+   `{id, title: <tên sản phẩm>, keywords: [...], caption: <tên sản phẩm>,
+   file, approved: true}`. Caption is the product name — Meta will not accept a
+   caption on an image attachment, so the worker sends the product name as a text
+   message first and the photos right after.
+3. Add the ids to the product's `images` array in `products.json` and re-render so
+   the document lists them (`Ảnh: ...`). The importer merges image records
+   additively, so hand-added photos survive a later `--apply`.
+
+**Keep image keywords narrow.** A broad keyword leaks photos onto sibling
+products: with `cá hồi` on the cut-piece photos, `Cho anh xin ảnh cá hồi nguyên
+con` returned photos of steaks. Use the discriminating phrase instead
+(`cá hồi cắt khúc`, `khúc giữa`, `cắt xô`) and never bare category words like
+`cá hồi`, `heo` or `khúc`. Verify with a few phrasings before shipping:
+
+```bash
+node -e "import('./src/images.mjs').then(async ({retrieveImages})=>{const {loadConfig}=await import('./src/config.mjs');const c=loadConfig(process.argv[1]);for(const q of ['cho xin ảnh cá hồi nguyên con','cho xin ảnh cá hồi cắt xô','ảnh ba chỉ bò'])console.log(q,'->',retrieveImages(c.imageCatalogFile,q).map(i=>i.id).join(',')||'(không có)')})" "$RUNTIME/config.json"
+```
+
+The same photos can serve several products (the cut-piece salmon photos back both
+khúc giữa and cắt xô) — give the record every keyword that should match it and
+list the ids under each product.
+
 ### Who the customer is decides the price tier
 
 The operator's rule lives in **three** prompts and they must agree

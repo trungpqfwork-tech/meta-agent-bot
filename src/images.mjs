@@ -18,6 +18,24 @@ export function imageFilePath(runtimeDir, img) {
 export function attachmentCacheFile(runtimeDir) {
   return resolvePath(runtimeDir, 'images', 'attachments.json');
 }
+// Meta lấy ảnh theo URL công khai (HTTPS). URL được suy ra từ chính domain webhook
+// đã có, nên không cần thêm cấu hình hosting: edge phục vụ /images/<tên file> cho
+// đúng những file nằm trong bản ghi ĐÃ DUYỆT.
+export function publicImageUrl(publicWebhookUrl, img) {
+  const name = basename(String(img?.file ?? '').trim());
+  if(!name || name.startsWith('.')) return null;
+  let origin;
+  try { origin = new URL(String(publicWebhookUrl)).origin; } catch { return null; }
+  if(!/^https:$/.test(new URL(origin).protocol)) return null;
+  return `${origin}/images/${encodeURIComponent(name)}`;
+}
+// Tên file mà edge được phép phục vụ công khai: chỉ ảnh đã duyệt.
+export function approvedImageNames(catalogFile) {
+  return new Set(loadImageCatalog(catalogFile)
+    .filter(img => img.approved === true)
+    .map(img => basename(String(img.file ?? '').trim()))
+    .filter(name => name && !name.startsWith('.')));
+}
 export function loadAttachmentCache(runtimeDir) {
   const file = attachmentCacheFile(runtimeDir);
   if(!existsSync(file)) return {};
