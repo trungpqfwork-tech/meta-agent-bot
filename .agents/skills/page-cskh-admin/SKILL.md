@@ -97,6 +97,63 @@ node scripts/import-products.mjs --file "/path/products.xlsx" \
   (verified). Always build an explicit name→(product, brand) map and get it
   approved before applying.
 
+### How the importer merges, and how to re-render safely
+
+Every `--apply` **regenerates all `product-*` and `category-*` documents from
+`products.json`** and republishes them; only documents outside those two families
+(`policy-*`, `example-*`) survive untouched.
+
+- **Never hand-edit a `product-*` document in `knowledge.json`.** The next import
+  overwrites it. Text that must persist goes into `products.json` (`notes`,
+  `origins`, brand `traits`/`bestFor`, `useCases`) or into a `policy-*` document.
+  This bit once: a paragraph explaining which ba chỉ bò cuts are retail lived
+  only in the document and disappeared on the next import.
+- **An empty cell must never erase imported data.** `mergeProduct()` keeps the
+  existing value when the incoming one is empty (`category`, `name`, `traits`,
+  and every price field). A sheet with no `Nhóm` column used to blank the
+  category of products that already had one — and a product without a category
+  drops out of its `category-*` document, so the bot stops offering it. If you
+  add a merge field, guard it the same way.
+- **Notes are prose, not a keyword list.** They are stored and rendered whole; do
+  not route them through `uniq()`, which splits on `,`, `;`, `/` and shreds
+  `140.000đ/khay 500gr` into fragments. Strip trailing `.` before joining so the
+  rendered line does not read `…từ Nga.; Móng heo…`.
+- **To re-render documents without touching data**, pass a file with no rows:
+  ```bash
+  echo '[]' > /tmp/empty-rows.json
+  node scripts/import-products.mjs --file /tmp/empty-rows.json --runtime "$RUNTIME" --apply
+  ```
+  `Retrieval`/rendering is what you want after editing `products.json` directly;
+  it reports `Update/merge: 0`.
+- **Back up before any apply** — the importer writes `products.json.bak-*`,
+  `knowledge.json.bak-*` and `images/catalog.json.bak-*` on its own, but take your
+  own copy too, and diff afterwards to see exactly which documents changed.
+
+### Keywords decide whether the bot can answer at all
+
+`retrieve()` scores documents by whole-phrase keyword hits, so a document the
+customer asked about still loses if its keywords do not match how customers
+write. The importer generates extra variants per product name; keep them when you
+touch that code:
+
+- the name with any parenthetical qualifier removed and its inner forms
+  (`Cá hồi cắt khúc (khúc giữa)` → `Cá hồi cắt khúc`, `khúc giữa`);
+- the name with the trailing category noun dropped (`Sụn non heo` → `sụn non`);
+- every leading word-prefix (`Tôm thẻ hấp size 25` → `tôm thẻ`, `Tôm thẻ hấp`);
+- the single distinctive first word of a two-word name (`Dải heo` → `dải`,
+  `Tim heo` → `tim`).
+
+Symptoms of missing variants: the bot answers from a `category-*` document and
+says it has no origin/price for an item it does hold ("dữ liệu em chưa ghi rõ
+xuất xứ"), or asks the customer to repeat the product. Verify with one line:
+
+```bash
+node -e "import('$APP/src/knowledge.mjs').then(({retrieve})=>{
+  const K='$RUNTIME/knowledge.json';
+  for(const q of ['sụn non giá sao','mực ống giá sao','tôm thẻ giá sao'])
+    console.log(q,'->',retrieve(K,q).filter(d=>d.id.startsWith('product-')).map(d=>d.id).join(', '));})"
+```
+
 ### Price model (three tiers)
 
 `Giá mua dùng` = households. `Giá buôn` = bếp ăn / nhà hàng / khách sạn / quán
@@ -112,6 +169,7 @@ overwrote the wholesale pack, printing `147/Khay` for a price that was per kg.
 A row naming a brand puts the price on that brand only; a row without a brand
 puts it on the product. Brands sharing identical traits and prices still group
 into one line, so one row listing `APK, Miratoc, VLMK` is enough.
+
 - The Excel reader is python3 **stdlib** (zipfile + ElementTree) and expands
   merged cells. Do **not** install or require `openpyxl`, and `.xls` must be
   re-saved as `.xlsx`.
@@ -123,6 +181,34 @@ into one line, so one row listing `APK, Miratoc, VLMK` is enough.
   automatically — report those paths.
 - Report a diff summary (added/updated/removed) and 3-4 smoke questions after
   applying. Do not silently delete products that the new file omits.
+
+### Who the customer is decides the price tier
+
+The operator's rule lives in **three** prompts and they must agree
+(`agentPolicy` in `src/knowledge.mjs`, `UNDERSTAND_PROMPT` and
+`EXTRACT_ORDER_PROMPT` in `src/worker.mjs` — changing one alone leaves the others
+contradicting it):
+
+- **Wholesale** (`customerType=store`): resale or a business — cửa hàng, đại lý,
+  anyone taking goods to buôn bán/kinh doanh/bán lại, nhà hàng, quán ăn, bếp ăn,
+  khách sạn — **and customers taking meat to cook for a gathering or a wedding**
+  (`làm cỗ`, `làm tiệc`, `tiệc cưới`, `đám cưới`, `đặt tiệc`, `phục vụ tiệc`).
+- **Retail** (`customerType=personal`): dùng cho gia đình, liên hoan, hội họp,
+  sinh nhật, giỗ trong nhà, mua 1-2kg, mua khay.
+- **Unknown**: read out **no** money figure at all — not wholesale, not a range,
+  not "chỉ bán buôn" — describe traits/origin/uses and ask exactly one question:
+  `Anh/chị lấy về cho nhà hàng, quán ăn hay mua về dùng cho gia đình ạ?`
+
+Verify against the real model before shipping a prompt change:
+
+```bash
+node scripts/tier-check.mjs --config "$RUNTIME/config.json"          # 8 phrasings
+node scripts/tier-check.mjs --config "$RUNTIME/config.json" --runs 3 # stability
+```
+
+`liên hoan`/`hội họp` are retail while `cỗ`/`tiệc cưới` are wholesale — that
+boundary is the operator's call (confirmed 2026-10-05). If a run flips one,
+tighten that branch in all three prompts, not just the answer text.
 
 Verify after applying:
 
@@ -218,6 +304,22 @@ records the rejected text in `answer=...`. Diagnose in this order:
    (300s), then `auto_reset_waiting` returns it to `BOT`. Any customer message
    arriving inside that window is `cancelled` and **never answered** — check
    `jobs` for `cancelled` rows before blaming the model.
+5. The turn in progress must win its context slots. `primary` merges the last
+   three customer messages, so a heavier previous topic can fill all five slots
+   and push out the document for the product just asked about: after a
+   conversation about ba chỉ bò, "Sụn non bên em xuất xứ từ đâu?" retrieved five
+   ba chỉ bò documents (score 3) and dropped sụn non (score 2), so the bot said
+   the origin was missing. `src/worker.mjs` therefore runs a separate pass for
+   the current message and keeps up to three of its documents at the front
+   (matched only, score > 0, so a bare "Hi em" takes no slot).
+   `test/context-priority.test.mjs` reproduces it: it fails with the pass removed
+   and passes with it. Measure before changing it:
+   ```bash
+   node --test test/context-priority.test.mjs
+   ```
+   If documents are still missing, print the retrieval for the exact bundle
+   (`last 3 customer messages + current message`) and compare scores — do not
+   assume the model is at fault.
 
 **Bot answers about the wrong product.** `retrieve()` scores keyword hits against
 the query. It used substring matching, so short keywords matched inside unrelated
