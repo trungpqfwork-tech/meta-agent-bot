@@ -181,7 +181,11 @@ export class Store {
         this.db.prepare('INSERT OR IGNORE INTO conversations(psid) VALUES (?)').run(e.psid);
         let kind=e.kind;
         if(kind==='echo') {
-          const sent=this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND psid=?').get(e.mid,e.psid);
+          // Ảnh bot gửi không có dòng outbox (outbox chỉ ghi 1 dòng cho tin chữ), nên
+          // phải nhận diện qua dấu vết `sent:<mid>` — nếu không, echo của chính ảnh
+          // mình gửi bị coi là người lạ nhắn và hội thoại bị chuyển sang HUMAN.
+          const sent=this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND psid=?').get(e.mid,e.psid)
+            || this.db.prepare('SELECT 1 FROM events WHERE id=?').get(`${this.pageId}:sent:${e.mid}`);
           kind=sent ? 'bot_echo' : 'page_external';
         }
         const previous=this.conversation(e.psid);
@@ -348,6 +352,15 @@ export class Store {
       this.db.prepare('INSERT OR IGNORE INTO events(id,psid,kind,text,at,session_id) VALUES (?,?,?,?,?,?)').run(`${this.pageId}:sent:${mid}`,j.psid,'bot',text,Date.now(),this.currentSessionId(j.psid));
       this.audit(j.psid,'sent',j.id);
     });
+  }
+  // Ảnh gửi đi không có dòng outbox riêng (outbox khoá theo job, mỗi job 1 dòng cho
+  // tin chữ). Ghi dấu vết `sent:<mid>` để echo của chính ảnh mình gửi được nhận diện
+  // là của bot thay vì bị coi là người lạ nhắn (từng làm hội thoại chuyển HUMAN oan).
+  // kind 'bot_echo' nên dấu vết này không lọt vào history gửi cho model.
+  sentImage(psid,mid) {
+    if(!mid) return;
+    this.db.prepare('INSERT OR IGNORE INTO events(id,psid,kind,text,at,session_id) VALUES (?,?,?,?,?,?)')
+      .run(`${this.pageId}:sent:${mid}`,psid,'bot_echo','',Date.now(),this.currentSessionId(psid));
   }
   reconcile(jobId,delivered) {
     const o=this.db.prepare("SELECT * FROM outbox WHERE job_id=? AND status='unknown'").get(jobId);

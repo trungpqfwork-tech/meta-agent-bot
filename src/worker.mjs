@@ -6,8 +6,48 @@ import { dirname,resolve } from 'node:path';
 // Khách xin ảnh thì gửi tối đa từng này ảnh một lượt (người vận hành chốt 06/10/2026).
 const MAX_IMAGES_PER_REPLY = 5;
 function log(path,msg){try{mkdirSync(dirname(path),{recursive:true});appendFileSync(path,`${new Date().toISOString()} ${msg}\n`);}catch{}}
+// Chữ có dấu phải quy về dạng không dấu TRƯỚC khi so khớp, và "đ" cũng phải thành
+// "d" — nếu không thì "đặt" thành "đat" và mọi mẫu \bdat\b đều trượt.
+function plainText(text) {
+  return String(text??'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/đ/g,'d').replace(/Đ/g,'d').toLowerCase();
+}
 function asksAboutOrdering(text) {
-  return /\b(dat|mua|order|chot|ship|giao|bao gia|gia)\b|đặt|mua|chốt|giao|giá/i.test(text.normalize('NFD').replace(/\p{Diacritic}/gu,'').toLowerCase());
+  return /\b(dat|mua|order|chot|ship|giao|lay|don|thung|khay|kg|so luong|thanh toan|chuyen khoan|bao gia)\b/.test(plainText(text));
+}
+// Lượt trích đơn tốn 6-19s, nên chỉ chạy khi tin nhắn CÓ KHẢ NĂNG mang thông tin đơn:
+// từ khoá mua/bán, số lượng, số điện thoại, địa chỉ, hoặc khi bot vừa hỏi xin thông tin
+// đơn mà khách trả lời ngắn. Tin xin ảnh, hỏi đặc tính, xã giao thì bỏ qua — B1 vẫn ghi
+// nhận sản phẩm và loại khách nên không mất dấu khách đang quan tâm món gì.
+function botAskedForOrderInfo(history) {
+  const lastBot=[...history].reverse().find(x=>x.kind==='bot');
+  return lastBot ? /(cho em xin|xin anh|xin chị|xin tên|số điện thoại|địa chỉ|tên anh|tên chị|tên bạn|để em ghi)/i.test(String(lastBot.text??'')) : false;
+}
+export function needsOrderExtraction(text, order, history) {
+  const t=String(text??'').trim();
+  if(!t) return false;
+  // Xin ảnh và câu xã giao không bao giờ mang thông tin đơn -> bỏ qua chắc chắn.
+  if(/^(ok|oke|okay|okie|vâng|vang|dạ|da|ừ|uh|um|hi|hello|chào|alo|thanks|cảm ơn|cam on)\b/i.test(t)) return false;
+  if(/ảnh|hình/i.test(t)) return false;
+  if(asksAboutOrdering(t)) return true;
+  if(/\d+\s?(kg|ký|ki|thùng|khay|con|hộp|túi|cân)/i.test(t)) return true;
+  if(/(\+?\d[\d\s.\-]{8,})/.test(t)) return true;
+  if(/địa chỉ|số nhà|đường|phường|xã|quận|huyện|tỉnh|thành phố|giao hàng|nhận hàng|ship/i.test(t)) return true;
+  const collecting=order?.status==='collecting' && (order?.missing?.length??0)>0;
+  if(!collecting) return false;
+  // Đang thu thập đơn: khách trả lời cụt (tên, "vâng", "ở Thái Bình"...) rất dễ chở
+  // thông tin đơn, nên vẫn trích — nhưng chỉ với tin NGẮN, để câu hỏi đặc tính dài
+  // không kéo thêm 6-19s.
+  return botAskedForOrderInfo(history) || t.length<=25;
+}
+// Ảnh phải theo đúng nguyên tắc của tài liệu: câu ĐANG hỏi thắng ngữ cảnh cũ. Trộn
+// câu hiện tại với các tin trước rồi cắt lấy 5 sẽ loại mất ảnh của món vừa hỏi —
+// khách hỏi "ảnh bò jbs" ngay sau khi xem cá hồi thì chỉ còn 1 ảnh bò trong payload
+// và bot gửi đúng 1 ảnh. Lấy ảnh của tin hiện tại trước, ngữ cảnh chỉ lấp chỗ trống.
+export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IMAGES_PER_REPLY) {
+  const current = retrieveImages(catalogFile, currentMessage);
+  const seen = new Set(current.map(i => i.id));
+  const rest = retrieveImages(catalogFile, docQuery).filter(i => !seen.has(i.id));
+  return [...current, ...rest].slice(0, limit).map(({ score, ...img }) => img);
 }
 function hasOrderPatch(patch) {
   return !!(patch?.customerType || patch?.customerName || patch?.phone || patch?.address || patch?.notes || (Array.isArray(patch?.products) && patch.products.length));
@@ -120,6 +160,7 @@ export class Worker {
         const url=img.url ?? publicImageUrl(this.config.publicWebhookUrl,img);
         const payload=url ? {url} : {attachment_id:await this.attachmentIdFor(runtimeDir,img)};
         const mid=await this.meta.sendImage(j.psid,payload);
+        if(this.store?.sentImage) this.store.sentImage(j.psid,mid);
         log(this.logFile,`process image_sent psid=${j.psid} job=${j.id} image=${img.id} mid=${mid??'none'}`);
         this.store.audit(j.psid,'image_sent',`${j.id}:${img.id}`);
       } catch(e) {
@@ -276,6 +317,14 @@ export class Worker {
         const context=history.filter(x=>x.kind==='customer').slice(-3).map(x=>x.text).join('\n');
         let order=s.order(j.psid);
         const base={page:{name:c.pageName,scope:c.scopeDescription,topics:c.scopeKeywords},documents:[],images:[],history,currentMessage:j.text,order:publicOrder(order),topic:session?.topic??null,summary:session?.summary??''};
+        // [B-extract] Trích đơn chạy SONG SONG với B1: hai lượt này độc lập nhau (cùng
+        // đọc câu khách + order, không dùng kết quả của nhau), nên xếp hàng chúng chỉ
+        // làm khách chờ thêm 6-19s. Chỉ chạy khi tin nhắn có khả năng mang thông tin đơn.
+        const wantExtract=needsOrderExtraction(j.text,order,history);
+        const extractRun=wantExtract
+          ? this.extractOrder(j,base).catch(e=>{log(this.logFile,`process extract_error psid=${j.psid} error=${String(e?.message??e).slice(0,200)}`);return null;})
+          : null;
+        log(this.logFile,`process extract_${wantExtract?'start_parallel':'skipped'} psid=${j.psid}${wantExtract?'':' reason=not_order_related'}`);
         // [B1] Hiểu trước — chạy khi topic thiếu/hết hạn/khách đổi chủ đề/tin ngắn-đại từ.
         // B1 đọc câu khách + mạch hội thoại nên "Gia đình đi" vẫn ra được "hỏi giá cá hồi".
         if(this.needsUnderstanding(session,j.text)) {
@@ -332,16 +381,14 @@ export class Worker {
           .filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;})
           .filter(d=>!d.id.startsWith('policy-'));
         docs=[...rest.slice(0,Math.max(0,8-uniquePolicy.length)),...uniquePolicy];
-        const images=retrieveImages(c.imageCatalogFile,docQuery).map(({score,...img})=>img);
+        const images=pickImages(c.imageCatalogFile,j.text,docQuery);
         payload={...base,documents:docs.map(({score,...d})=>d),images,topic:session?.topic??null,summary:session?.summary??''};
-        if(asksAboutOrdering(`${context}\n${j.text}`) || order?.status==='collecting') {
-          const patch=await this.extractOrder(j,payload);
-          if(patch && (patch.wantsOrder || order || hasOrderPatch(patch))) {
-            order=s.saveOrder(j.psid,patch);
-            payload={...payload,order:publicOrder(order)};
-            log(this.logFile,`process order_update psid=${j.psid} status=${order.status} missing=${JSON.stringify(order.missing)} products=${JSON.stringify(order.products).slice(0,120)}`);
-            await this.notifyReadyOrder(j,order);
-          }
+        const patch=extractRun ? await extractRun : null;
+        if(patch && (patch.wantsOrder || order || hasOrderPatch(patch))) {
+          order=s.saveOrder(j.psid,patch);
+          payload={...payload,order:publicOrder(order)};
+          log(this.logFile,`process order_update psid=${j.psid} status=${order.status} missing=${JSON.stringify(order.missing)} products=${JSON.stringify(order.products).slice(0,120)}`);
+          await this.notifyReadyOrder(j,order);
         }
         const raw=await this.infer(j,payload,agentPolicy);
         answer=await this.answerFromModel(j,payload,raw,docs);
@@ -425,7 +472,7 @@ export class Worker {
       s.finish(j.id,'cancelled','newer_customer_message');
       return;
     }
-    log(this.logFile,`process answer psid=${j.psid} action=${answer.action} reason=${answer.reason??'none'} sources=${JSON.stringify(answer.sourceIds??[]).slice(0,80)} text=${JSON.stringify(text).slice(0,120)}`);
+    log(this.logFile,`process answer psid=${j.psid} action=${answer.action} reason=${answer.reason??'none'} sources=${JSON.stringify(answer.sourceIds??[]).slice(0,80)} images=${JSON.stringify(answer.imageIds??[])} text=${JSON.stringify(text).slice(0,120)}`);
     s.prepare(j,text,answer.sourceIds,c.mode==='draft'?'draft':'ready');
     if(c.mode==='draft') {s.finish(j.id,'draft',answer.action);return;}
     // This synchronous check + marking is the final local admission boundary.
