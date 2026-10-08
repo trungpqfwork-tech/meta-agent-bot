@@ -447,6 +447,14 @@ export class Worker {
       }
     } catch(e) {
       log(this.logFile,`process agent_error psid=${j.psid} job=${j.id} error=${String(e?.message??e).slice(0,300)}`);
+      // Timeout/treo model là lỗi hạ tầng, KHÔNG phải quyết định nghiệp vụ: trả job về
+      // hàng đợi kèm backoff (requeue có trần 2 lần) để khách vẫn được trả lời. Trước
+      // đây ca này handoff ngay, khách nhận "em chuyển nhân viên" chỉ vì model treo.
+      // Model trả lời sai định dạng hoặc hết ngân sách gọi thì KHÔNG thử lại: đó là
+      // vấn đề nội dung/quota, thử lại chỉ làm khách chờ thêm.
+      const errorText=String(e?.message??e);
+      const infraFail=/timed out|timeout|completion failed|fetch failed|socket hang up|ECONNRESET|ETIMEDOUT/i.test(errorText);
+      if(infraFail && s.requeue(j.id,60000,'infra_retry_after_answer')) return;
       answer={action:'handoff',text:'',sourceIds:[],reason:'agent_or_knowledge_unavailable'};
     }
     if(this.stopped || !s.allowed(j)) {s.finish(j.id,'cancelled','ownership_changed');return;}
