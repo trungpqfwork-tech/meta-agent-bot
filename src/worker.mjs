@@ -43,10 +43,49 @@ export function needsOrderExtraction(text, order, history) {
 // câu hiện tại với các tin trước rồi cắt lấy 5 sẽ loại mất ảnh của món vừa hỏi —
 // khách hỏi "ảnh bò jbs" ngay sau khi xem cá hồi thì chỉ còn 1 ảnh bò trong payload
 // và bot gửi đúng 1 ảnh. Lấy ảnh của tin hiện tại trước, ngữ cảnh chỉ lấp chỗ trống.
+//
+// Chia đều giữa các NHÓM (theo tiêu đề ảnh): khách hỏi hàng Canada mà kho có cả Excel
+// và JBS thì phải nhận vài ảnh mỗi hãng — nếu xếp theo thứ tự bảng chữ cái thì 5 chỗ
+// bị một hãng chiếm hết và hãng kia không có ảnh nào.
+function spreadByGroup(list) {
+  const groups = new Map();
+  for(const img of list) {
+    const key = img.title ?? img.id;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(img);
+  }
+  const out = [];
+  let added = true;
+  while(added) {
+    added = false;
+    for(const arr of groups.values()) if(arr.length) { out.push(arr.shift()); added = true; }
+  }
+  return out;
+}
+// Khách nói rõ hãng (điểm khớp cao hơn hẳn) thì lấy hết ảnh của hãng đó trước; khi các
+// hãng khớp ngang nhau (hỏi chung "ba chỉ bò", hoặc "hàng Canada") thì chia đều.
+function orderByScoreThenSpread(list) {
+  const groups = new Map();
+  for(const img of list) {
+    const key = img.title ?? img.id;
+    if(!groups.has(key)) groups.set(key, { max: 0, items: [] });
+    const g = groups.get(key);
+    g.max = Math.max(g.max, img.score ?? 0);
+    g.items.push(img);
+  }
+  const ranked = [...groups.values()].sort((a, b) => b.max - a.max);
+  if(ranked.length > 1 && ranked[0].max > ranked[1].max) {
+    return [...ranked[0].items, ...spreadByGroup(ranked.slice(1).flatMap(g => g.items))];
+  }
+  return spreadByGroup(list);
+}
 export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IMAGES_PER_REPLY) {
-  const current = retrieveImages(catalogFile, currentMessage);
+  // Lấy dư (retrieveImages mặc định chỉ trả 5) rồi mới chia đều và cắt theo `limit`:
+  // nếu để nó cắt trước thì 5 chỗ bị hãng đứng trước trong bảng chữ cái chiếm hết.
+  const pool = Math.max(limit * 4, 20);
+  const current = orderByScoreThenSpread(retrieveImages(catalogFile, currentMessage, pool));
   const seen = new Set(current.map(i => i.id));
-  const rest = retrieveImages(catalogFile, docQuery).filter(i => !seen.has(i.id));
+  const rest = orderByScoreThenSpread(retrieveImages(catalogFile, docQuery, pool).filter(i => !seen.has(i.id)));
   return [...current, ...rest].slice(0, limit).map(({ score, ...img }) => img);
 }
 function hasOrderPatch(patch) {
