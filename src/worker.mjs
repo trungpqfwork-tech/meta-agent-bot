@@ -79,13 +79,23 @@ function orderByScoreThenSpread(list) {
   }
   return spreadByGroup(list);
 }
-export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IMAGES_PER_REPLY) {
+// Ảnh có thể dành riêng cho khách buôn (hình thùng carton, hàng 10-30kg) hoặc khách
+// lẻ (khay thái lát): khách lẻ xem ảnh thùng hàng thì không đúng nhu cầu và ngược lại.
+// Ảnh không ghi đối tượng coi như dùng chung cho cả hai.
+function audienceAllows(img, audience) {
+  const a = img.audience ?? 'both';
+  if (audience === 'wholesale') return a === 'wholesale' || a === 'both';
+  if (audience === 'retail') return a === 'retail' || a === 'both';
+  return true; // chưa rõ khách buôn hay lẻ -> gửi cả hai
+}
+export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IMAGES_PER_REPLY, audience = 'both') {
   // Lấy dư (retrieveImages mặc định chỉ trả 5) rồi mới chia đều và cắt theo `limit`:
   // nếu để nó cắt trước thì 5 chỗ bị hãng đứng trước trong bảng chữ cái chiếm hết.
   const pool = Math.max(limit * 4, 20);
-  const current = orderByScoreThenSpread(retrieveImages(catalogFile, currentMessage, pool));
+  const keep = list => list.filter(i => audienceAllows(i, audience));
+  const current = orderByScoreThenSpread(keep(retrieveImages(catalogFile, currentMessage, pool)));
   const seen = new Set(current.map(i => i.id));
-  const rest = orderByScoreThenSpread(retrieveImages(catalogFile, docQuery, pool).filter(i => !seen.has(i.id)));
+  const rest = orderByScoreThenSpread(keep(retrieveImages(catalogFile, docQuery, pool).filter(i => !seen.has(i.id))));
   return [...current, ...rest].slice(0, limit).map(({ score, ...img }) => img);
 }
 function hasOrderPatch(patch) {
@@ -420,7 +430,11 @@ export class Worker {
           .filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true;})
           .filter(d=>!d.id.startsWith('policy-'));
         docs=[...rest.slice(0,Math.max(0,8-uniquePolicy.length)),...uniquePolicy];
-        const images=pickImages(c.imageCatalogFile,j.text,docQuery);
+        // Loại khách đã hiểu trong phiên (nhom_khach) hoặc trong đơn quyết định kho ảnh
+        // nào được gửi: ảnh thùng carton cho khách buôn, ảnh khay thái lát cho khách lẻ.
+        const buyer=session?.topic?.nhom_khach ?? order?.customer_type ?? '';
+        const audience=buyer==='store' ? 'wholesale' : buyer==='personal' ? 'retail' : 'both';
+        const images=pickImages(c.imageCatalogFile,j.text,docQuery,MAX_IMAGES_PER_REPLY,audience);
         payload={...base,documents:docs.map(({score,...d})=>d),images,topic:session?.topic??null,summary:session?.summary??''};
         const patch=extractRun ? await extractRun : null;
         if(patch && (patch.wantsOrder || order || hasOrderPatch(patch))) {
