@@ -71,11 +71,23 @@ export function loadImageCatalog(file) {
   return catalog.images;
 }
 
+// Từ khoá ngắn (≤3 ký tự sau khi bỏ dấu) rất dễ khớp bừa vào giữa chữ khác: từ khoá
+// "gù" khớp chữ "gửi" nên khách nào gõ "gửi mình xem ảnh" cũng bị hiểu là đang hỏi
+// Gù hoa — payload toàn ảnh gù hoa, không còn ảnh của món khách hỏi, và bot trả lời
+// "chưa có ảnh". Với từ khoá ngắn, chỉ tính khớp khi nó đứng riêng một từ.
+function keywordMatches(query, keyword) {
+  const k = normalize(keyword);
+  if(!k) return false;
+  if(k.length > 3) return query.includes(k);
+  const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(query);
+}
+
 export function retrieveImages(file, query, limit=5) {
   const q = normalize(query);
   return loadImageCatalog(file)
     .filter(img => img.approved === true)
-    .map(img => ({...img, score: img.keywords.reduce((n,k) => n + (q.includes(normalize(k)) ? 1 : 0),0)}))
+    .map(img => ({...img, score: img.keywords.reduce((n,k) => n + (keywordMatches(q,k) ? 1 : 0),0)}))
     .filter(img => img.score > 0)
     .sort((a,b) => b.score-a.score)
     .slice(0, limit);
