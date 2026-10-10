@@ -84,15 +84,40 @@ export function loadImageCatalog(file) {
 export function words(text) {
   return normalize(String(text ?? '')).split(/[^a-z0-9]+/).filter(Boolean);
 }
-function keywordMatch(qWords, keyword) {
+// Gõ sai/thiếu một ký tự vẫn phải khớp: khách gõ "thái mog" (thiếu n) hoặc "mogn"
+// (đổi chỗ 2 ký tự) vẫn là "mỏng". Chỉ nhận hai dạng lỗi an toàn:
+//  - thiếu/thừa đúng 1 ký tự ("mog" ~ "mong"),
+//  - đổi chỗ 2 ký tự liền nhau ("mogn" ~ "mong").
+// KHÔNG nhận thay thế 1 ký tự ("thay" không được khớp "thái") và không áp cho từ ≤2
+// ký tự ("ga", "bo"), để từ ngắn vẫn phải khớp chính xác.
+export function closeEnough(a, b) {
+  if(a === b) return true;
+  if(Math.min(a.length, b.length) < 3) return false;
+  if(Math.abs(a.length - b.length) > 1) return false;
+  if(a.length === b.length) {
+    const diff = [];
+    for(let i = 0; i < a.length; i++) if(a[i] !== b[i]) diff.push(i);
+    if(diff.length !== 2 || diff[1] !== diff[0] + 1) return false;
+    return a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]];
+  }
+  const long = a.length > b.length ? a : b;
+  const short = a.length > b.length ? b : a;
+  let skipped = 0;
+  for(let i = 0, j = 0; i < long.length && j < short.length; ) {
+    if(long[i] === short[j]) { i++; j++; continue; }
+    if(++skipped > 1) return false;
+    i++;
+  }
+  return true;
+}
+function keywordMatch(qWords, qList, keyword) {
   const kw = words(keyword);
   if(!kw.length) return null;
-  let matched = 0;
-  for(const w of kw) if(qWords.has(w)) matched++;
-  if(!matched) return null;
-  const full = matched === kw.length;
-  if(!full && !(kw.length >= 4 && matched >= kw.length - 1)) return null;
-  return { words: kw, matched, ratio: matched / kw.length };
+  const hits = kw.filter(w => qWords.has(w) || qList.some(t => closeEnough(w, t)));
+  if(!hits.length) return null;
+  const full = hits.length === kw.length;
+  if(!full && !(kw.length >= 4 && hits.length >= kw.length - 1)) return null;
+  return { words: kw, hits, matched: hits.length, ratio: hits.length / kw.length };
 }
 
 // Điểm của một ảnh = tổng TRỌNG SỐ IDF của các từ trong từ khoá khớp nhiều nhất.
@@ -106,6 +131,7 @@ function keywordMatch(qWords, keyword) {
 // hàng thùng hãng khác — hai mặt hàng khác nhau, không được lẫn.
 export function imageScores(images, query) {
   const qWords = new Set(words(query));
+  const qList = [...qWords];
   const kwWords = new Map();
   const df = new Map();
   for(const img of images) {
@@ -121,11 +147,11 @@ export function imageScores(images, query) {
   const scored = images.map(img => {
     let score = 0, ratio = 0, full = false;
     for(const k of img.keywords) {
-      const m = keywordMatch(qWords, k);
+      const m = keywordMatch(qWords, qList, k);
       if(!m) continue;
       if(m.matched === m.words.length) full = true;
       let s = 0;
-      for(const w of m.words) if(qWords.has(w)) s += weight(w);
+      for(const w of m.hits) s += weight(w);
       if(s > score || (s === score && m.ratio > ratio)) { score = s; ratio = m.ratio; }
     }
     return {...img, score, ratio, full};

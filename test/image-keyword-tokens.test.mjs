@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pickImages } from '../src/worker.mjs';
+import { closeEnough } from '../src/images.mjs';
 
 // Kho ảnh giống runtime: ba chỉ bò đóng thùng (JBS/Excel) có từ khoá trần "ba chỉ bò",
 // thái dày, thái mỏng, cuộn; thêm chân gà rút xương vs chân gà nguyên xương (2 mặt hàng
@@ -55,4 +56,35 @@ test('hỏi chung "ba chỉ bò" thì mỗi nhóm ảnh đều có mặt (không
   assert.equal(ids.length, 5, `5 ảnh: ${ids.join(', ')}`);
   for (const prefix of ['ba-chi-bo-jbs-', 'ba-chi-bo-thai-day-', 'ba-chi-bo-thai-mong-', 'ba-chi-bo-cuon-'])
     assert.ok(ids.some(id => id.startsWith(prefix)), `thiếu nhóm ${prefix}: ${ids.join(', ')}`);
+});
+
+test('gõ thiếu 1 ký tự "thái mog" vẫn ra ảnh thái mỏng, không trộn dày/cuộn', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'page-cskh-typo-'));
+  const file = join(dir, 'images/catalog.json');
+  mkdirSync(join(dir, 'images'));
+  const images = [];
+  const push = (id, title, keywords) => images.push({ id, title, keywords, caption: title, file: `${id}.jpg`, approved: true });
+  for (const n of [1, 2, 3, 4, 5]) push(`ba-chi-bo-jbs-${n}`, 'Ba chỉ bò Blue ribbon (JBS)', ['ba chỉ bò blue ribbon', 'ba chỉ bò jbs', 'jbs', 'ba chỉ bò']);
+  for (let i = 1; i <= 4; i++) push(`ba-chi-bo-thai-day-${i}`, 'Ba chỉ bò thái dày', ['ba chỉ bò thái dày', 'ba chỉ bò', 'thái dày', 'ăn nướng']);
+  for (let i = 1; i <= 6; i++) push(`ba-chi-bo-thai-mong-${i}`, 'Ba chỉ bò thái mỏng', ['ba chỉ bò thái mỏng', 'ba chỉ bò', 'thái mỏng', 'ăn lẩu']);
+  for (const n of [1, 2, 3]) push(`ba-chi-bo-cuon-${n}`, 'Ba chỉ bò loại 3 (cuộn)', ['ba chỉ bò cuộn', 'ba chỉ bò', 'thái cuộn', 'ăn lẩu']);
+  writeFileSync(file, JSON.stringify({ schemaVersion: 1, images }));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ids = pickImages(file, 'Cho ảnh ba chỉ bò thái mog', 'Cho ảnh ba chỉ bò thái mog').map(i => i.id);
+  assert.deepEqual(ids, ['ba-chi-bo-thai-mong-1', 'ba-chi-bo-thai-mong-2', 'ba-chi-bo-thai-mong-3', 'ba-chi-bo-thai-mong-4', 'ba-chi-bo-thai-mong-5'], ids.join(', '));
+});
+
+test('câu hỏi đơn hàng không được khớp bừa sang từ khóa ảnh: "thay" ≠ "thái"', t => {
+  const file = catalog(t);
+  const ids = pickImages(file, 'Anh muốn thay đổi đơn hàng đã đặt', 'Anh muốn thay đổi đơn hàng đã đặt').map(i => i.id);
+  assert.deepEqual(ids, [], `payload phải rỗng, nhận: ${ids.join(', ')}`);
+});
+
+test('nhận lỗi thiếu/đổi chỗ 1 ký tự nhưng không nhận thay thế ký tự', () => {
+  assert.equal(closeEnough('mog', 'mong'), true, 'thiếu 1 ký tự');
+  assert.equal(closeEnough('mogn', 'mong'), true, 'đổi chỗ 2 ký tự liền nhau');
+  assert.equal(closeEnough('thay', 'thai'), false, 'thay thế 1 ký tự thì KHÔNG khớp');
+  assert.equal(closeEnough('mong', 'mang'), false, 'thay thế 1 ký tự thì KHÔNG khớp');
+  assert.equal(closeEnough('bo', 'bong'), false, 'từ ngắn phải khớp chính xác');
+  assert.equal(closeEnough('mong', 'mong'), true, 'khớp chính xác');
 });
