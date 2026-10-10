@@ -73,11 +73,19 @@ function orderByScoreThenSpread(list) {
     g.max = Math.max(g.max, img.score ?? 0);
     g.items.push(img);
   }
-  const ranked = [...groups.values()].sort((a, b) => b.max - a.max);
-  if(ranked.length > 1 && ranked[0].max > ranked[1].max) {
-    return [...ranked[0].items, ...spreadByGroup(ranked.slice(1).flatMap(g => g.items))];
+  // Xếp theo TẦNG điểm: ảnh khớp nhiều từ khoá hơn (đúng mặt hàng/đúng mục đích hơn) luôn đứng
+  // trước; chỉ chia đều trong CÙNG một tầng, để ảnh của nhiều hãng/nhiều độ dày bằng điểm nhau vẫn
+  // có mặt (giữ hành vi cũ). Trước đây trộn cả tầng điểm thấp vào nên ảnh hàng thùng chen mất chỗ
+  // của ảnh thái mỏng/thái dày.
+  const byScore = [...groups.values()].sort((a, b) => b.max - a.max);
+  const out = [];
+  for (let i = 0; i < byScore.length; ) {
+    let j = i;
+    while (j < byScore.length && byScore[j].max === byScore[i].max) j++;
+    out.push(...spreadByGroup(byScore.slice(i, j).flatMap(g => g.items)));
+    i = j;
   }
-  return spreadByGroup(list);
+  return out;
 }
 // Ảnh có thể dành riêng cho khách buôn (hình thùng carton, hàng 10-30kg) hoặc khách
 // lẻ (khay thái lát): khách lẻ xem ảnh thùng hàng thì không đúng nhu cầu và ngược lại.
