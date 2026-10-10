@@ -103,10 +103,23 @@ export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IM
   // bằng điểm nhau, pool 20 làm nhóm thái mỏng (nằm cuối catalog) bị cắt mất hoàn toàn.
   const pool = Math.max(limit * 10, 50);
   const keep = list => list.filter(i => audienceAllows(i, audience));
-  const current = orderByScoreThenSpread(keep(retrieveImages(catalogFile, currentMessage, pool)));
+  // Lọc theo nhóm khách có thể làm pool RỖNG: khách được hiểu là quán mà kho chỉ có ảnh
+  // gắn "khách lẻ" (ca thật 10/10/2026: khách quán xin ảnh ba chỉ bò thái mỏng → 0 ảnh
+  // ⇒ model viết "chưa có ảnh" ⇒ bộ chấm chặn ⇒ hết ngân sách gọi ⇒ chuyển nhân viên).
+  // Ảnh đúng mặt hàng vẫn hơn là không có ảnh: nới về "cả hai" khi bản lọc rỗng.
+  pickImages.audienceFallback = false;
+  const pickFor = msg => {
+    const all = retrieveImages(catalogFile, msg, pool);
+    const filtered = keep(all);
+    if(!filtered.length && all.length) { pickImages.audienceFallback = true; return all; }
+    return filtered;
+  };
+  const current = orderByScoreThenSpread(pickFor(currentMessage));
   const seen = new Set(current.map(i => i.id));
-  const rest = orderByScoreThenSpread(keep(retrieveImages(catalogFile, docQuery, pool).filter(i => !seen.has(i.id))));
-  return [...current, ...rest].slice(0, limit).map(({ score, ...img }) => img);
+  const rest = orderByScoreThenSpread(pickFor(docQuery).filter(i => !seen.has(i.id)));
+  const picked = [...current, ...rest].slice(0, limit).map(({ score, ...img }) => img);
+  if(!picked.length && (current.length || rest.length)) pickImages.audienceFallback = true;
+  return picked;
 }
 function hasOrderPatch(patch) {
   return !!(patch?.customerType || patch?.customerName || patch?.phone || patch?.address || patch?.notes || (Array.isArray(patch?.products) && patch.products.length));
@@ -445,6 +458,7 @@ export class Worker {
         const buyer=session?.topic?.nhom_khach ?? order?.customer_type ?? '';
         const audience=buyer==='store' ? 'wholesale' : buyer==='personal' ? 'retail' : 'both';
         const images=pickImages(c.imageCatalogFile,j.text,docQuery,MAX_IMAGES_PER_REPLY,audience);
+        if(pickImages.audienceFallback) log(this.logFile,`process image_audience_fallback psid=${j.psid} buyer=${buyer} text=${JSON.stringify(j.text).slice(0,80)}`);
         payload={...base,documents:docs.map(({score,...d})=>d),images,topic:session?.topic??null,summary:session?.summary??''};
         const patch=extractRun ? await extractRun : null;
         if(patch && (patch.wantsOrder || order || hasOrderPatch(patch))) {

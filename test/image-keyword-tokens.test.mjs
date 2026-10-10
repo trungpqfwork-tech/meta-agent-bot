@@ -88,3 +88,31 @@ test('nhận lỗi thiếu/đổi chỗ 1 ký tự nhưng không nhận thay th�
   assert.equal(closeEnough('bo', 'bong'), false, 'từ ngắn phải khớp chính xác');
   assert.equal(closeEnough('mong', 'mong'), true, 'khớp chính xác');
 });
+
+// Ca thật 10/10/2026: khách quán xin ảnh thái sẵn nhưng kho chỉ có ảnh gắn "retail" ⇒
+// payload RỖNG ⇒ bot nói "chưa có ảnh" ⇒ hết ngân sách gọi model ⇒ chuyển nhân viên.
+test('lọc theo nhóm khách ra rỗng thì nới về cả hai, không trả payload rỗng', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'page-cskh-aud-'));
+  const file = join(dir, 'images/catalog.json');
+  mkdirSync(join(dir, 'images'));
+  const images = [{ id: 'ba-chi-bo-thai-mong-1', title: 'Ba chỉ bò thái mỏng', keywords: ['ba chỉ bò thái mỏng', 'thái mỏng'], caption: 'Ba chỉ bò thái mỏng', file: 'a.jpg', approved: true, audience: 'retail' }];
+  writeFileSync(file, JSON.stringify({ schemaVersion: 1, images }));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ids = pickImages(file, 'Cho anh ảnh ba chỉ bò thái mỏng', 'Cho anh ảnh ba chỉ bò thái mỏng', 5, 'wholesale').map(i => i.id);
+  assert.deepEqual(ids, ['ba-chi-bo-thai-mong-1'], `phải nới về cả hai, nhận: ${ids.join(', ') || '(rỗng)'}`);
+  assert.equal(pickImages.audienceFallback, true, 'phải bật cờ audit');
+});
+
+// Bản lọc còn ảnh thì vẫn phải lọc: khách lẻ không được thấy ảnh hàng thùng.
+test('khách lẻ vẫn không thấy ảnh thùng khi bản lọc còn ảnh', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'page-cskh-aud2-'));
+  const file = join(dir, 'images/catalog.json');
+  mkdirSync(join(dir, 'images'));
+  const mk = (id, audience) => ({ id, title: 'Ba chỉ bò', keywords: ['ba chỉ bò', 'ba chỉ bò thái mỏng', 'thái mỏng'], caption: 'Ba chỉ bò', file: `${id}.jpg`, approved: true, audience });
+  const images = [mk('ba-chi-bo-jbs-1', 'wholesale'), mk('ba-chi-bo-thai-mong-1', 'retail'), mk('ba-chi-bo-thai-mong-2', 'retail')];
+  writeFileSync(file, JSON.stringify({ schemaVersion: 1, images }));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const ids = pickImages(file, 'Cho anh ảnh ba chỉ bò thái mỏng', 'Cho anh ảnh ba chỉ bò thái mỏng', 5, 'retail').map(i => i.id);
+  assert.deepEqual(ids, ['ba-chi-bo-thai-mong-1', 'ba-chi-bo-thai-mong-2'], ids.join(', '));
+  assert.equal(pickImages.audienceFallback, false);
+});
