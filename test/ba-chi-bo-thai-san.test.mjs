@@ -57,3 +57,30 @@ test('luật phân biệt lẩu/nướng của ba chỉ bò thái sẵn còn tro
   assert.match(agentPolicy, /NƯỚNG[^]*thái dày, thái mỏng[^]*cuộn/);
   assert.match(agentPolicy, /thái dày hay thái mỏng/);
 });
+
+test('khách gõ thiếu dấu "ba chỉ bò mong" vẫn phải ra ảnh thái mỏng, không lôi ảnh hàng đóng thùng', t => {
+  const file = catalog(t);
+  const ids = pickImages(file, 'Cho anh ảnh ba chỉ bò mong', 'Cho anh ảnh ba chỉ bò mong').map(i => i.id);
+  assert.equal(ids.length, 5, `phải đủ 5 ảnh, nhận ${ids.length}: ${ids.join(', ')}`);
+  assert.ok(ids.every(id => id.startsWith('ba-chi-bo-thai-mong-')), `chỉ ảnh thái mỏng: ${ids.join(', ')}`);
+});
+
+test('"ba chỉ bò mong" (thiếu dấu) không được lẫn thái dày, cuộn hay hàng thùng', t => {
+  const file = catalog(t);
+  const ids = pickImages(file, 'cho anh xem ảnh ba chỉ bò mong', 'cho anh xem ảnh ba chỉ bò mong').map(i => i.id);
+  assert.ok(!ids.some(id => id.includes('-jbs-') || id.includes('-excel-')), `không hàng thùng: ${ids.join(', ')}`);
+  assert.ok(!ids.some(id => id.startsWith('ba-chi-bo-thai-day-')), `không thái dày: ${ids.join(', ')}`);
+});
+
+test('câu mơ hồ "ảnh rút xương" vẫn để payload rỗng dù đã đổi cách chấm từ khoá', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'page-cskh-bcb-rx-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, 'images'));
+  const file = join(dir, 'images/catalog.json');
+  writeFileSync(file, JSON.stringify({ schemaVersion: 1, images: [
+    { id: 'chan-ga-rut-xuong-1', title: 'Chân gà rút xương', keywords: ['chân gà rút xương', 'gà rút xương'], caption: 'x', file: 'x.jpg', approved: true },
+    { id: 'ba-chi-heo-rut-xuong-1', title: 'Ba chỉ heo rút xương', keywords: ['ba chỉ heo rút xương', 'heo rút xương'], caption: 'x', file: 'x.jpg', approved: true },
+  ] }));
+  const ids = pickImages(file, 'cho anh xem ảnh rút xương', 'cho anh xem ảnh rút xương').map(i => i.id);
+  assert.deepEqual(ids, [], `payload phải rỗng để bot hỏi lại: ${ids.join(', ')}`);
+});
