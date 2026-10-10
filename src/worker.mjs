@@ -98,8 +98,10 @@ function audienceAllows(img, audience) {
 }
 export function pickImages(catalogFile, currentMessage, docQuery, limit = MAX_IMAGES_PER_REPLY, audience = 'both') {
   // Lấy dư (retrieveImages mặc định chỉ trả 5) rồi mới chia đều và cắt theo `limit`:
-  // nếu để nó cắt trước thì 5 chỗ bị hãng đứng trước trong bảng chữ cái chiếm hết.
-  const pool = Math.max(limit * 4, 20);
+  // nếu để nó cắt trước thì 5 chỗ bị nhóm đứng trước trong catalog chiếm hết. Pool phải
+  // rộng hơn hẳn số ảnh của mặt hàng đông nhất: câu hỏi chung "ba chỉ bò" có 26 ảnh
+  // bằng điểm nhau, pool 20 làm nhóm thái mỏng (nằm cuối catalog) bị cắt mất hoàn toàn.
+  const pool = Math.max(limit * 10, 50);
   const keep = list => list.filter(i => audienceAllows(i, audience));
   const current = orderByScoreThenSpread(keep(retrieveImages(catalogFile, currentMessage, pool)));
   const seen = new Set(current.map(i => i.id));

@@ -99,6 +99,11 @@ function keywordMatch(qWords, keyword) {
 // Từ chung chung ("ba", "chỉ", "bò" — có ở hàng chục ảnh) gần như không phân biệt
 // được gì; từ đặc trưng ("mong", "jbs", "rivasam" — chỉ vài ảnh) quyết định xếp hạng.
 // Nhờ vậy khách nêu hãng/độ dày thì đúng nhóm đó lên đầu, kể cả khi câu thiếu dấu.
+//
+// Ảnh chỉ khớp MỘT PHẦN từ khoá (thiếu 1 từ) chỉ được vào payload khi không còn ảnh
+// nào khớp TRỌN từ khoá: nếu không, khách hỏi "chân gà rút xương" sẽ nhận kèm ảnh
+// "chân gà nguyên xương" (khớp 3/4 từ), hoặc khách hỏi "ba chỉ bò jbs" nhận kèm ảnh
+// hàng thùng hãng khác — hai mặt hàng khác nhau, không được lẫn.
 export function imageScores(images, query) {
   const qWords = new Set(words(query));
   const kwWords = new Map();
@@ -113,18 +118,22 @@ export function imageScores(images, query) {
   }
   const total = images.length || 1;
   const weight = w => Math.log(1 + total / (df.get(w) ?? 1));
-  return images.map(img => {
-    let score = 0, ratio = 0;
+  const scored = images.map(img => {
+    let score = 0, ratio = 0, full = false;
     for(const k of img.keywords) {
       const m = keywordMatch(qWords, k);
       if(!m) continue;
+      if(m.matched === m.words.length) full = true;
       let s = 0;
       for(const w of m.words) if(qWords.has(w)) s += weight(w);
       if(s > score || (s === score && m.ratio > ratio)) { score = s; ratio = m.ratio; }
     }
-    return {...img, score, ratio};
-  }).filter(img => img.score > 0)
-    .sort((a, b) => b.score - a.score || b.ratio - a.ratio);
+    return {...img, score, ratio, full};
+  }).filter(img => img.score > 0);
+  const pool = scored.some(img => img.full) ? scored.filter(img => img.full) : scored;
+  return pool
+    .sort((a, b) => b.score - a.score || b.ratio - a.ratio)
+    .map(({ full, ...img }) => img);
 }
 export function retrieveImages(file, query, limit=5) {
   const images = loadImageCatalog(file).filter(img => img.approved === true);
