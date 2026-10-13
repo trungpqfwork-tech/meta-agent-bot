@@ -64,4 +64,5 @@ The UI is local, token-authenticated, single-operator; it is not a multi-user IA
 
 See [setup](docs/SETUP.md), [operations](docs/OPERATIONS.md),
 [security](docs/SECURITY.md), [acceptance](docs/ACCEPTANCE.md),
-[migration](docs/MIGRATION.md), [status](docs/STATUS.md).
+[migration](docs/MIGRATION.md), [status](docs/STATUS.md),
+[VPS build](docs/VPS-BUILD.md), [container + pm2 deploy](docs/CONTAINER-PM2-DEPLOY.md).

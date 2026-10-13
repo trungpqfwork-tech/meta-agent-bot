@@ -22,6 +22,7 @@
     "mode": "PAGE_CSKH_MODE",
     "waitingResetSeconds": "PAGE_CSKH_WAITING_RESET_SECONDS",
     "messageDebounceSeconds": "PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS",
+    "humanIdleResetSeconds": "PAGE_CSKH_HUMAN_IDLE_RESET_SECONDS",
     "enableHumanHandoff": "PAGE_CSKH_ENABLE_HUMAN_HANDOFF",
     "scopeDescription": "PAGE_CSKH_SCOPE_DESCRIPTION",
     "scopeKeywords": "PAGE_CSKH_SCOPE_KEYWORDS",
@@ -41,6 +42,7 @@
     "edgePort": ["1025..65535", "must differ from adminPort"],
     "agentTimeoutMs": ["1..120000"],
     "waitingResetSeconds": ["0 disables", "positive integer seconds"],
+    "humanIdleResetSeconds": ["0 disables", "integer seconds from 0..86400"],
     "messageDebounceSeconds": ["0 disables", "integer seconds from 0..60"]
   },
   "schemaVersion": 1,
@@ -64,6 +66,7 @@
   "orderTelegramChatIds": [],
   "mode": "draft",
   "waitingResetSeconds": 0,
+  "humanIdleResetSeconds": 300,
   "messageDebounceSeconds": 2,
   "enableHumanHandoff": true,
   "scopeDescription": "Chỉ tư vấn dịch vụ, sản phẩm và chính sách của Page này.",

@@ -138,6 +138,13 @@ scripts/setup-admin-agent.sh --check     # xem còn thiếu gì
 scripts/setup-admin-agent.sh             # tạo profile cskh-admin + trust repo
 ```
 
+> **Trên Hermes v0.20.0 script này không chạy được.** Nó gọi `hermes skills trust` —
+> subcommand đã bị bỏ (`invalid choice: 'trust'`) — và bị lifecycle guard chặn vì chứa
+> lệnh restart gateway. Các bước tương đương (profile, `skills.external_dirs`,
+> `terminal.cwd`, gateway qua pm2) nằm ở
+> [`CONTAINER-PM2-DEPLOY.md`](CONTAINER-PM2-DEPLOY.md) §6, kèm 4 cái bẫy của
+> `hermes profile create --clone` (SOUL.md, memories, platforms.webhook, session cũ).
+
 Nếu anh **chỉ chat được với Hermes trên VPS** và không SSH vào terminal, hãy gửi
 cho Hermes trên VPS đúng yêu cầu này sau khi code đã nằm ở `/srv/page-cskh/app`:
 
@@ -157,8 +164,11 @@ Hermes (SSH/systemd/cloud-init/Ansible) để cài Hermes lần đầu.
 
 Script tạo profile (`--clone` để có sẵn provider + key, **không** copy token
 messaging mặc định), chạy `hermes skills trust <repo>` để `.agents/skills/` được
-load, set `terminal.cwd` tuyệt đối về repo, và nếu runtime `.env` có các biến
-sau thì tự import bot Telegram admin vào profile `cskh-admin`:
+load (**lưu ý:** subcommand này đã bị bỏ ở Hermes v0.20.0 — xem
+[`CONTAINER-PM2-DEPLOY.md`](CONTAINER-PM2-DEPLOY.md) §6 để dùng
+`skills.external_dirs` thay thế), set `terminal.cwd` tuyệt đối về repo, và nếu
+runtime `.env` có các biến sau thì tự import bot Telegram admin vào profile
+`cskh-admin`:
 
 ```dotenv
 PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN=123456:bot-token-cua-admin-agent
