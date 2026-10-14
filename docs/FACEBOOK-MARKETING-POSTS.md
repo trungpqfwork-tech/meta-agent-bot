@@ -356,6 +356,28 @@ Required methods:
 - `publishPhotoPost({caption, imageUrl, filePath, scheduledAt})`
 - `readPost(postId)`
 
+### How the permission probe must read the grant
+
+A **Page** access token cannot read `GET /me/permissions` — Graph answers
+`HTTP 400 code=100 "Tried accessing nonexisting field (permissions)"`. That is an
+endpoint limitation, not a missing grant, so a probe built on it fails even when
+the token has every scope it needs.
+
+Read the grant with `debug_token` instead, using an app access token
+(`app_id|app_secret`) while the Page token goes in `input_token`:
+
+```text
+GET /{graphVersion}/debug_token?input_token=<page token>&access_token=<app_id|app_secret>
+```
+
+Useful fields: `type` (must be `PAGE`), `profile_id` (must equal the configured
+Page id), `is_valid`, `expires_at` (`0` = never expires), `scopes`, and
+`granular_scopes`. Each `granular_scopes` entry carries `target_ids`: when present
+the grant is limited to those Pages, so a scope granted only for a **different**
+Page is unusable here and must be reported as missing (`wrongPage`). The probe
+returns `{granted, missing, wrongPage, tokenType, tokenPageId, pageMatches, valid,
+expiresAt, scopes}` and must never echo token values.
+
 What the publisher sends is composed at publish time, not stored as-is:
 
 - `composePostMessage(caption, hashtags)` appends the draft's hashtags to the

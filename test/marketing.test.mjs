@@ -323,3 +323,51 @@ test('missing CTA or fewer than 3 hashtags keeps a post under a 6-point gate',as
   assert.equal(fewTags.score,6);
   assert.match(fewTags.notes.join(';'),/Hashtag/);
 });
+
+test('permission probe reads debug_token because a Page token cannot read /me/permissions',async()=>{
+  const calls=[];
+  const fetcher=async(url,opts)=>{calls.push({url:String(url),opts});return {ok:true,json:async()=>({data:{
+    type:'PAGE',profile_id:'100',is_valid:true,expires_at:0,
+    scopes:['pages_manage_posts','pages_read_engagement','pages_show_list','pages_messaging'],
+    granular_scopes:[
+      {scope:'pages_manage_posts',target_ids:['100']},
+      {scope:'pages_read_engagement',target_ids:['100']},
+      {scope:'pages_show_list',target_ids:['100']}
+    ]}})};};
+  const client=metaClient({graphVersion:'v25.0',pageId:'100',appId:'200'},{META_PAGE_PUBLISH_ACCESS_TOKEN:'publish-token',META_APP_SECRET:'app-secret'},fetcher);
+  const res=await client.probePostPermissions();
+  assert.equal(calls.length,1);
+  assert.match(calls[0].url,/\/debug_token\?/);
+  assert.ok(!/me\/permissions/.test(calls[0].url),'must not call the nonexisting /me/permissions field');
+  assert.match(calls[0].url,/input_token=publish-token/);
+  assert.match(calls[0].url,/access_token=200%7Capp-secret/);
+  assert.deepEqual(res.granted,['pages_manage_posts','pages_read_engagement','pages_show_list']);
+  assert.deepEqual(res.missing,[]);
+  assert.deepEqual(res.wrongPage,[]);
+  assert.equal(res.valid,true);
+  assert.equal(res.pageMatches,true);
+  assert.equal(res.expiresAt,0);
+  assert.equal(res.tokenType,'PAGE');
+});
+
+test('permission probe reports a missing scope and a scope granted for another Page',async()=>{
+  const fetcher=async()=>({ok:true,json:async()=>({data:{
+    type:'PAGE',profile_id:'100',is_valid:true,expires_at:0,
+    scopes:['pages_manage_posts','pages_read_engagement'],
+    granular_scopes:[
+      {scope:'pages_manage_posts',target_ids:['999']},
+      {scope:'pages_read_engagement',target_ids:['100']}
+    ]}})});
+  const client=metaClient({graphVersion:'v25.0',pageId:'100',appId:'200'},{META_PAGE_ACCESS_TOKEN:'messenger-token',META_APP_SECRET:'app-secret'},fetcher);
+  const res=await client.probePostPermissions();
+  assert.deepEqual(res.granted,['pages_read_engagement']);
+  assert.deepEqual(res.wrongPage,['pages_manage_posts']);
+  assert.deepEqual(res.missing.slice().sort(),['pages_manage_posts','pages_show_list']);
+  assert.equal(res.pageMatches,true);
+});
+
+test('permission probe surfaces the Meta error instead of a generic failure',async()=>{
+  const fetcher=async()=>({ok:false,json:async()=>({error:{message:'Invalid OAuth access token.',code:190}})});
+  const client=metaClient({graphVersion:'v25.0',pageId:'100',appId:'200'},{META_PAGE_ACCESS_TOKEN:'t',META_APP_SECRET:'s'},fetcher);
+  await assert.rejects(()=>client.probePostPermissions(),/Meta token probe failed: Invalid OAuth access token\..*code=190/);
+});
