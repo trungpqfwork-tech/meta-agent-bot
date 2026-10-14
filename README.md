@@ -17,6 +17,8 @@ completion adapter → scoped KB → human handoff → guarded Messenger Send AP
   validation and a second isolated model review for factual replies.
 - BOT / WAITING / HUMAN state, local takeover/resume console and audit history.
 - Draft mode by default; live mode probes Page token ownership at startup.
+- Admin-only Facebook marketing post drafts, approval, scheduling/publishing guards
+  and Meta readback auditing (disabled by default).
 - No blind retries after uncertain sends. Operator reconciliation is required.
 - `.env` parsed privately by plugin, not exported globally or placed in agent workspace.
 - Setup plan/apply, doctor, verify, operator CLI and portable npm tarball.

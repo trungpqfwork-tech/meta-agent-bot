@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { eventHash } from './store.mjs';
+import { handleTelegramMarketingUpdate } from './telegram.mjs';
 function log(path,msg){try{mkdirSync(dirname(path),{recursive:true});appendFileSync(path,`${new Date().toISOString()} ${msg}\n`);}catch{}}
 function clientIp(req){return String(req.headers['cf-connecting-ip']||req.headers['x-forwarded-for']||req.socket.remoteAddress||'unknown').split(',')[0].trim();}
 function summarizeEvents(events){
@@ -37,7 +38,7 @@ export function normalizeEvents(payload,pageId) {
   }
   return out;
 }
-export function makeWebhook(config,secrets,store) {
+export function makeWebhook(config,secrets,store,marketing=null) {
   const logFile=resolve(dirname(config.database),'..','logs','webhook.log');
   return async(req,res)=> {
     const u=new URL(req.url,'http://localhost');
@@ -45,6 +46,15 @@ export function makeWebhook(config,secrets,store) {
     res.setHeader('Content-Type','text/plain; charset=utf-8');
     res.setHeader('X-Content-Type-Options','nosniff');
     log(logFile,`INCOMING method=${req.method} path=${u.pathname} ip=${clientIp(req)} len=${req.headers['content-length']??'unknown'}`);
+    if(u.pathname===`${config.webhookPath}/telegram`) {
+      if(req.method!=='POST') { res.statusCode=405; res.end(); return true; }
+      try {
+        if(!equal(req.headers['x-telegram-bot-api-secret-token'],secrets.CSKH_ADMIN_TOKEN)) { res.statusCode=403; res.end('forbidden'); return true; }
+        const update=JSON.parse((await readBody(req,131072)).toString('utf8'));
+        await handleTelegramMarketingUpdate(config,secrets,store,marketing,update);
+        res.statusCode=200; res.end('OK'); return true;
+      } catch(e) { log(logFile,`TELEGRAM err=${e.message}`); res.statusCode=200; res.end('OK'); return true; }
+    }
     if(req.method==='GET') {
       const ok=u.searchParams.get('hub.mode')==='subscribe' && equal(u.searchParams.get('hub.verify_token'),secrets.META_WEBHOOK_VERIFY_TOKEN);
       log(logFile,`GET verify ${ok?'ok':'fail'} challenge=${u.searchParams.get('hub.challenge')??'none'}`);

@@ -79,6 +79,103 @@ PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=["123456789","-1001234567890"]
 Leave `PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS=[]` to disable Telegram order
 notifications and handoff alerts.
 
+Admin-only Facebook marketing posts are optional and disabled by default:
+
+```dotenv
+PAGE_CSKH_ENABLE_MARKETING_POSTS=false
+PAGE_CSKH_MARKETING_APPROVAL_REQUIRED=true
+PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY=3
+PAGE_CSKH_MARKETING_DEFAULT_TONE=thân thiện, chuyên nghiệp, ngắn gọn
+PAGE_CSKH_MARKETING_TIMEZONE=Asia/Ho_Chi_Minh
+PAGE_CSKH_MARKETING_QUIET_HOURS=22:00-07:00
+PAGE_CSKH_MARKETING_MIN_SCORE=0
+PAGE_CSKH_MARKETING_REVISE_ATTEMPTS=1
+PAGE_CSKH_MARKETING_LOW_SCORE_ACTION=warn
+```
+
+The score gate decides what happens to a draft that scores below
+`PAGE_CSKH_MARKETING_MIN_SCORE` on the 10-point Facebook SEO/social rubric:
+
+- `MIN_SCORE=0` disables the gate; the score is only shown.
+- With `MIN_SCORE>0` the service rewrites the draft up to
+  `REVISE_ATTEMPTS` times (0-3), feeding the exact rubric failures back to the
+  model, and keeps the highest-scoring version. Each rewrite is another model
+  call.
+- Still below the gate: the post gets a `low_seo_score_<n>` risk flag.
+  `LOW_SCORE_ACTION=warn` (default) still sends the Telegram preview with a
+  "dưới ngưỡng" warning; `hold` sends nothing to Telegram and leaves the post in
+  the admin UI list only.
+- A gate above what a no-image draft can reach (6/10) is rejected unless
+  `REVISE_ATTEMPTS>0` or `LOW_SCORE_ACTION=hold`, so a gate cannot silently do
+  nothing.
+
+To publish Page posts, the configured Page token (or optional
+`META_PAGE_PUBLISH_ACCESS_TOKEN`) must have `pages_manage_posts`,
+`pages_read_engagement`, and `pages_show_list`. Publishing still requires admin
+approval and `PAGE_CSKH_MODE=live`; customer conversations never trigger this
+workflow. The auto-draft path also uses this token to read the Page's own
+`published_posts` as style references. If Meta denies that read, manual draft
+creation still works and the service falls back to no style examples; old Page
+posts are never treated as factual sources for the new post.
+
+The recommended way to create a durable Page publish token is the helper script:
+
+```bash
+npm run exchange-meta-page-token -- --env /home/trungpq/.openclaw/page-cskh-runtime/.env
+```
+
+It asks for a short-lived **USER** token in the terminal with hidden input, then
+validates `type=USER`, exchanges it for a long-lived user token, calls
+`/me/accounts`, selects Page `TM Food` / `100505959659399`, verifies the result is
+`type=PAGE` with `profile_id=100505959659399` and the required post scopes, and
+prints only redacted fingerprints/expiry info.
+
+The first run is a dry run. If it reports `status: dry_run`, write the verified
+Page token into the runtime env with:
+
+```bash
+npm run exchange-meta-page-token -- --env /home/trungpq/.openclaw/page-cskh-runtime/.env --apply
+```
+
+For non-interactive local use, put the short-lived USER token in a private file
+outside the repo and pass `--user-token-file /private/path/token.txt`; delete the
+file afterwards. Never paste tokens into chat or commit them. Desired publish
+token verification:
+
+```text
+type: PAGE
+profile_id: 100505959659399
+required_missing: []
+expires_at: none/unknown
+```
+
+Approval happens on Telegram: each draft is sent to
+`PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS` with an inline keyboard (Duyệt / Hủy /
+Đăng ngay / Sửa). Preview messages are sent by the **admin bot**
+(`PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN`), so that bot needs its own webhook too —
+inline buttons only work while the bot webhook points at
+`${PAGE_CSKH_PUBLIC_WEBHOOK_URL}/telegram`, and Telegram drops that webhook
+whenever the gateway restarts. `deploy-runtime` re-registers the webhook for both
+the service bot and the admin bot at the end of every run (`--skip-telegram` opts
+out) and reports each result under `telegramWebhook`. If buttons "blink" and
+nothing happens, check that key first:
+
+```bash
+set -a; . <runtime>/.env; set +a      # bot token stays in the shell, never echoed
+for t in "$TELEGRAM_BOT_TOKEN" "$PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN"; do
+  curl -s "https://api.telegram.org/bot${t}/getWebhookInfo" | grep -o '"url":"[^"]*"'
+done
+```
+
+A quick tunnel URL changes on restart; when it does, update
+`PAGE_CSKH_PUBLIC_WEBHOOK_URL` and re-run `deploy-runtime --apply`. A reachable
+ingress answers `403` to a POST without the secret header:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+  -d '{}' "${PAGE_CSKH_PUBLIC_WEBHOOK_URL}/telegram"
+```
+
 `PAGE_CSKH_EDGE_PORT` controls the local webhook-only PM2 edge port. The public
 domain must reverse proxy only `PAGE_CSKH_WEBHOOK_PATH` to
 `127.0.0.1:${PAGE_CSKH_EDGE_PORT}`. `PAGE_CSKH_ADMIN_PORT` is private operator

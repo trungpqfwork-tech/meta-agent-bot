@@ -39,8 +39,13 @@ Ports in `.env` are only read when `config.json` is generated
 ## Admin agent
 
 `.agents/skills/page-cskh-admin/` is the operating procedure for the admin agent
-(KB updates, behaviour changes, conversation ops, diagnostics, deploy). It loads
-for any agent whose working directory is this repo once the repo is trusted:
+(KB updates, behaviour changes, conversation ops, diagnostics, deploy).
+`.agents/skills/facebook-seo-content/` is the Facebook SEO/social writing rubric
+used when drafting or scoring marketing posts (hard rules, caption structure,
+10-point rubric, rewrite procedure). The service embeds the same rubric in the
+marketing prompt, so drafts are self-checked before they reach Telegram approval.
+Both load for any agent whose working directory is this repo once the repo is
+trusted:
 
 ```bash
 hermes skills trust <repo root>      # enables ./.agents/skills and ./.hermes/skills

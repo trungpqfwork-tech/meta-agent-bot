@@ -31,8 +31,12 @@ export class Store {
         CREATE TABLE IF NOT EXISTS orders(psid TEXT PRIMARY KEY,status TEXT NOT NULL DEFAULT 'collecting',customer_type TEXT NOT NULL DEFAULT '',customer_name TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',products TEXT NOT NULL DEFAULT '[]',fb_name TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',raw TEXT NOT NULL DEFAULT '{}',notified_at INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,updated INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,psid TEXT,action TEXT NOT NULL,at INTEGER NOT NULL,detail TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,psid TEXT NOT NULL,at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS fb_posts(id TEXT PRIMARY KEY,status TEXT NOT NULL,topic TEXT NOT NULL DEFAULT '',title_internal TEXT NOT NULL DEFAULT '',caption TEXT NOT NULL,hashtags TEXT NOT NULL DEFAULT '[]',cta TEXT NOT NULL DEFAULT '',media TEXT NOT NULL DEFAULT '[]',link TEXT NOT NULL DEFAULT '',scheduled_at INTEGER NOT NULL DEFAULT 0,approved_by TEXT NOT NULL DEFAULT '',approved_at INTEGER NOT NULL DEFAULT 0,published_at INTEGER NOT NULL DEFAULT 0,facebook_post_id TEXT NOT NULL DEFAULT '',facebook_permalink TEXT NOT NULL DEFAULT '',error TEXT NOT NULL DEFAULT '',source_ids TEXT NOT NULL DEFAULT '[]',risk_flags TEXT NOT NULL DEFAULT '[]',created INTEGER NOT NULL,updated INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS fb_post_audit(id INTEGER PRIMARY KEY,post_id TEXT NOT NULL,action TEXT NOT NULL,at INTEGER NOT NULL,detail TEXT NOT NULL DEFAULT '');
         CREATE INDEX IF NOT EXISTS events_conversation ON events(psid,at);
-        CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(status,created);`);
+        CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(status,created);
+        CREATE INDEX IF NOT EXISTS fb_posts_status_schedule ON fb_posts(status,scheduled_at,created);
+        CREATE INDEX IF NOT EXISTS fb_post_audit_post ON fb_post_audit(post_id,id);`);
       const owner = this.db.prepare('SELECT value FROM meta WHERE key=?').get('pageId');
       this.ensureColumn('orders','notified_at','INTEGER NOT NULL DEFAULT 0');
       // Session segmentation + per-customer topic/summary. ADD COLUMN preserves
@@ -327,6 +331,101 @@ export class Store {
     this.audit(psid,'order_notified','telegram');
     return this.order(psid);
   }
+  marketingAudit(postId,action,detail='') { this.db.prepare('INSERT INTO fb_post_audit(post_id,action,at,detail) VALUES (?,?,?,?)').run(postId,action,Date.now(),String(detail??'').slice(0,1000)); }
+  cleanMarketingJson(value, fallback=[]) { try { return JSON.stringify(Array.isArray(value) ? value : fallback).slice(0,4000); } catch { return JSON.stringify(fallback); } }
+  createMarketingPost(draft={}) {
+    const id=draft.id || randomUUID(), now=Date.now();
+    const caption=String(draft.caption??'').trim();
+    assert(caption,'caption required');
+    this.db.prepare(`INSERT INTO fb_posts(id,status,topic,title_internal,caption,hashtags,cta,media,link,source_ids,risk_flags,created,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id,'pending_approval',String(draft.topic??'').slice(0,500),String(draft.title_internal??'').slice(0,500),caption.slice(0,5000),this.cleanMarketingJson(draft.hashtags),String(draft.cta??'').slice(0,500),this.cleanMarketingJson(draft.media),String(draft.link??'').slice(0,1000),this.cleanMarketingJson(draft.source_ids),this.cleanMarketingJson(draft.risk_flags),now,now);
+    this.marketingAudit(id,'draft_created');
+    return this.marketingPost(id);
+  }
+  marketingPost(id) { return this.db.prepare('SELECT * FROM fb_posts WHERE id=?').get(id); }
+  listMarketingPosts({limit=100,status=null}={}) {
+    if(status) return this.db.prepare('SELECT * FROM fb_posts WHERE status=? ORDER BY created DESC LIMIT ?').all(status,limit);
+    return this.db.prepare('SELECT * FROM fb_posts ORDER BY created DESC LIMIT ?').all(limit);
+  }
+  updateMarketingPost(id,patch={}) {
+    const current=this.marketingPost(id); assert(current && !['published','failed','cancelled','publishing'].includes(current.status),'Marketing post cannot be edited');
+    const next={
+      topic: patch.topic ?? current.topic,
+      title_internal: patch.title_internal ?? current.title_internal,
+      caption: patch.caption ?? current.caption,
+      hashtags: patch.hashtags ? this.cleanMarketingJson(patch.hashtags) : current.hashtags,
+      cta: patch.cta ?? current.cta,
+      media: patch.media ? this.cleanMarketingJson(patch.media) : current.media,
+      link: patch.link ?? current.link,
+      source_ids: patch.source_ids ? this.cleanMarketingJson(patch.source_ids) : current.source_ids,
+      risk_flags: patch.risk_flags ? this.cleanMarketingJson(patch.risk_flags) : current.risk_flags
+    };
+    assert(String(next.caption).trim(),'caption required');
+    this.db.prepare('UPDATE fb_posts SET topic=?,title_internal=?,caption=?,hashtags=?,cta=?,media=?,link=?,source_ids=?,risk_flags=?,updated=? WHERE id=?')
+      .run(String(next.topic).slice(0,500),String(next.title_internal).slice(0,500),String(next.caption).slice(0,5000),next.hashtags,String(next.cta).slice(0,500),next.media,String(next.link).slice(0,1000),next.source_ids,next.risk_flags,Date.now(),id);
+    this.marketingAudit(id,'edited');
+    return this.marketingPost(id);
+  }
+  approveMarketingPost(id,approvedBy='admin') {
+    const now=Date.now();
+    const r=this.db.prepare("UPDATE fb_posts SET status='approved',approved_by=?,approved_at=?,updated=?,error='' WHERE id=? AND status IN ('pending_approval','approved')").run(String(approvedBy).slice(0,200),now,now,id);
+    assert(r.changes===1,'Marketing post cannot be approved');
+    this.marketingAudit(id,'approved',approvedBy);
+    return this.marketingPost(id);
+  }
+  scheduleMarketingPost(id,scheduledAt,approvedBy='admin') {
+    assert(Number.isInteger(scheduledAt) && scheduledAt > 0,'Invalid scheduledAt');
+    return this.tx(()=>{
+      const p=this.marketingPost(id); assert(p && !['published','failed','cancelled'].includes(p.status),'Marketing post cannot be scheduled');
+      if(!p.approved_at) this.approveMarketingPost(id,approvedBy);
+      this.db.prepare("UPDATE fb_posts SET status='scheduled',scheduled_at=?,updated=?,error='' WHERE id=?").run(scheduledAt,Date.now(),id);
+      this.marketingAudit(id,'scheduled',String(scheduledAt));
+      return this.marketingPost(id);
+    });
+  }
+  marketingPostsDue(now=Date.now(),limit=10) { return this.db.prepare("SELECT * FROM fb_posts WHERE status='scheduled' AND scheduled_at>0 AND scheduled_at<=? ORDER BY scheduled_at,created LIMIT ?").all(now,limit); }
+  reserveMarketingPublish(id) {
+    return this.tx(()=>{
+      const p=this.marketingPost(id);
+      if(!p || !p.approved_at || !['approved','scheduled','failed'].includes(p.status)) return null;
+      this.db.prepare("UPDATE fb_posts SET status='publishing',updated=?,error='' WHERE id=?").run(Date.now(),id);
+      this.marketingAudit(id,'publishing');
+      return this.marketingPost(id);
+    });
+  }
+  markMarketingPublished(id,{facebookPostId,facebookPermalink,publishedAt=Date.now()}={}) {
+    assert(facebookPostId && facebookPermalink,'Published receipt required');
+    this.db.prepare("UPDATE fb_posts SET status='published',facebook_post_id=?,facebook_permalink=?,published_at=?,updated=?,error='' WHERE id=?").run(String(facebookPostId),String(facebookPermalink),publishedAt,Date.now(),id);
+    this.marketingAudit(id,'published',facebookPostId);
+    return this.marketingPost(id);
+  }
+  markMarketingFailed(id,error) {
+    this.db.prepare("UPDATE fb_posts SET status='failed',error=?,updated=? WHERE id=?").run(String(error?.message??error??'failed').slice(0,1000),Date.now(),id);
+    this.marketingAudit(id,'failed',String(error?.message??error??'failed').slice(0,1000));
+    return this.marketingPost(id);
+  }
+  markMarketingUnknown(id,detail='') {
+    this.db.prepare("UPDATE fb_posts SET status='unknown',error=?,updated=? WHERE id=?").run(String(detail).slice(0,1000),Date.now(),id);
+    this.marketingAudit(id,'publish_unknown',detail);
+    return this.marketingPost(id);
+  }
+  markStaleMarketingPublishingUnknown(cutoff=Date.now()-300000) {
+    const rows=this.db.prepare("SELECT id FROM fb_posts WHERE status='publishing' AND updated<?").all(cutoff);
+    for(const row of rows) this.markMarketingUnknown(row.id,'stale_publishing_on_startup');
+    return rows.length;
+  }
+  cancelMarketingPost(id,reason='') {
+    const r=this.db.prepare("UPDATE fb_posts SET status='cancelled',error=?,updated=? WHERE id=? AND status NOT IN ('published','failed','cancelled','publishing')").run(String(reason).slice(0,1000),Date.now(),id);
+    assert(r.changes===1,'Marketing post cannot be cancelled');
+    this.marketingAudit(id,'cancelled',reason);
+    return this.marketingPost(id);
+  }
+  reconcileMarketingPost(id,{outcome,facebookPostId='',facebookPermalink=''}={}) {
+    if(outcome==='published') return this.markMarketingPublished(id,{facebookPostId,facebookPermalink});
+    if(outcome==='failed') return this.markMarketingFailed(id,'operator_reconcile_not_published');
+    throw new Error('Invalid reconcile outcome');
+  }
+  marketingPublishedCountForDay(start,end) { return this.db.prepare("SELECT COUNT(*) AS n FROM fb_posts WHERE status='published' AND published_at>=? AND published_at<?").get(start,end).n; }
   // Handoff alerts are deduplicated per job: a retried job must not ping the
   // consultant twice, while a later handoff in the same conversation still does.
   handoffNotified(jobId) {
