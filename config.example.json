@@ -31,7 +31,16 @@
     "clarifyText": "PAGE_CSKH_CLARIFY_TEXT",
     "maxDailyAgentCalls": "PAGE_CSKH_MAX_DAILY_AGENT_CALLS",
     "maxCustomerCallsPerHour": "PAGE_CSKH_MAX_CUSTOMER_CALLS_PER_HOUR",
-    "agentTimeoutMs": "PAGE_CSKH_AGENT_TIMEOUT_MS"
+    "agentTimeoutMs": "PAGE_CSKH_AGENT_TIMEOUT_MS",
+    "marketing.enabled": "PAGE_CSKH_ENABLE_MARKETING_POSTS",
+    "marketing.approvalRequired": "PAGE_CSKH_MARKETING_APPROVAL_REQUIRED",
+    "marketing.maxPostsPerDay": "PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY",
+    "marketing.defaultTone": "PAGE_CSKH_MARKETING_DEFAULT_TONE",
+    "marketing.timezone": "PAGE_CSKH_MARKETING_TIMEZONE",
+    "marketing.quietHours": "PAGE_CSKH_MARKETING_QUIET_HOURS",
+    "marketing.minScore": "PAGE_CSKH_MARKETING_MIN_SCORE",
+    "marketing.reviseAttempts": "PAGE_CSKH_MARKETING_REVISE_ATTEMPTS",
+    "marketing.lowScoreAction": "PAGE_CSKH_MARKETING_LOW_SCORE_ACTION"
   },
   "_enum": {
     "mode": ["draft", "live"],
@@ -76,5 +85,13 @@
   "clarifyText": "Anh/chị muốn tìm hiểu sản phẩm hoặc dịch vụ nào của bên em ạ?",
   "maxDailyAgentCalls": 200,
   "maxCustomerCallsPerHour": 20,
-  "agentTimeoutMs": 45000
+  "agentTimeoutMs": 45000,
+  "marketing": {
+    "enabled": false,
+    "approvalRequired": true,
+    "maxPostsPerDay": 3,
+    "defaultTone": "thân thiện, chuyên nghiệp, ngắn gọn",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "quietHours": "22:00-07:00"
+  }
 }

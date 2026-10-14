@@ -4,7 +4,8 @@
 
 `npm run check && npm test` tests routing, HTTP signature/challenge, dedup, isolated
 histories, takeover while a model call runs, handoff, timeout reconciliation, restart,
-Page token binding, env mode, local admin auth, scope/citation checks and call caps.
+Page token binding, env mode, local admin auth, scope/citation checks, call caps,
+and admin-only marketing draft/approve/publish guards with mocked Meta readback.
 Mock models and Meta do not constitute real model/Meta proof.
 
 ## Isolated host install
@@ -38,6 +39,9 @@ the owner's production token, active config, Page routing or service ports.
 - Restart with HUMAN active → remains HUMAN. Old drafts are never auto-sent.
 - Attachment-only message goes to a human (no image/voice support in MVP).
 - Out-of-window message cannot trigger a send; API errors/timeouts require review.
+- Marketing Page post flow, if enabled: permission probe shows `pages_manage_posts`,
+  draft requires admin token, publish is blocked before approval, approved test
+  post is read back with a permalink, and ambiguous publish is reconciled manually.
 - Observe console on desktop/mobile and verify takeover/resume controls.
 
 Approval must identify the Page and permit live sending. Retain a dated operator

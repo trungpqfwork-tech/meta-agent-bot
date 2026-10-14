@@ -58,8 +58,19 @@ export function createEdge(c,secrets,fetcher=fetch) {
     if(++requests>300){res.statusCode=429;res.end('rate limited');return;}
     const u=new URL(req.url,'http://localhost');
     log(c.logFile,`REQUEST method=${req.method} path=${u.pathname} query=${JSON.stringify(safeSearchParams(u.searchParams))} ip=${clientIp(req)} headers=${JSON.stringify(safeHeaders(req.headers))}`);
-    if(u.pathname!==c.webhookPath){log(c.logFile,`REJECT path path=${u.pathname}`);res.statusCode=404;res.end('not found');return;}
+    if(u.pathname!==c.webhookPath && u.pathname!==`${c.webhookPath}/telegram`){log(c.logFile,`REJECT path path=${u.pathname}`);res.statusCode=404;res.end('not found');return;}
     log(c.logFile,`INCOMING method=${req.method} path=${u.pathname} ip=${clientIp(req)} ua=${JSON.stringify(req.headers['user-agent']??'')} len=${req.headers['content-length']??'unknown'}`);
+    if(u.pathname===`${c.webhookPath}/telegram`) {
+      if(req.method!=='POST'){res.statusCode=405;res.end('method not allowed');return;}
+      try {
+        if(!equal(req.headers['x-telegram-bot-api-secret-token'],secrets.CSKH_ADMIN_TOKEN)){log(c.logFile,'TELEGRAM secret_fail');res.statusCode=403;res.end('forbidden');return;}
+        const raw=await readBody(req,131072);
+        const telegramTarget=new URL(target); telegramTarget.pathname=`${target.pathname}/telegram`;
+        const r=await fetcher(telegramTarget,{method:'POST',headers:{'Content-Type':'application/json','x-telegram-bot-api-secret-token':secrets.CSKH_ADMIN_TOKEN},body:raw,redirect:'error',signal:AbortSignal.timeout(10000)});
+        log(c.logFile,`TELEGRAM upstream status=${r.status}`);
+        res.statusCode=r.status;res.end(r.status===200?'OK':'backend unavailable');return;
+      } catch(e) {log(c.logFile,`TELEGRAM err:${e.message}`);res.statusCode=e.message==='body_limit'?413:503;res.end('unavailable');return;}
+    }
     if(req.method==='GET') {
       const ok=u.searchParams.get('hub.mode')==='subscribe' && equal(u.searchParams.get('hub.verify_token'),secrets.META_WEBHOOK_VERIFY_TOKEN);
       log(c.logFile,`GET verify ${ok?'ok':'fail'} challenge=${u.searchParams.get('hub.challenge')??'none'}`);
@@ -87,7 +98,7 @@ if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
     assert(Number.isInteger(c.port)&&c.port>1024&&c.port<65536,'Invalid edge port');
     assert((statSync(c.envFile).mode&0o077)===0,'Env must have mode 600');
     const secrets=parseEnv(readFileSync(c.envFile,'utf8'));
-    assert(secrets.META_WEBHOOK_VERIFY_TOKEN?.length>=16 && secrets.META_APP_SECRET?.length>=16,'Required webhook secrets missing');
+    assert(secrets.META_WEBHOOK_VERIFY_TOKEN?.length>=16 && secrets.META_APP_SECRET?.length>=16 && secrets.CSKH_ADMIN_TOKEN?.length>=32,'Required webhook secrets missing');
     const logFile=resolve(dirname(process.argv[2]),'logs','edge.log');
     c.logFile=logFile;
     const server=createEdge(c,secrets);server.requestTimeout=15000;server.headersTimeout=10000;

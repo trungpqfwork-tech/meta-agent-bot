@@ -7,6 +7,7 @@ import { metaClient } from './meta.mjs';
 import { telegramNotifier } from './telegram.mjs';
 import { startAdmin } from './admin.mjs';
 import { loadKnowledge } from './knowledge.mjs';
+import { createMarketing } from './marketing.mjs';
 
 export default definePluginEntry({
   id:'page-cskh',name:'Page CSKH',description:'Page-bound customer support with human ownership',
@@ -14,8 +15,12 @@ export default definePluginEntry({
     const file=api.pluginConfig?.configFile;
     if(!file) return; // Safe cold install; setup enables only after files exist.
     const initial=loadConfig(file);
-    let handler,worker,store,admin;
+    let handler,worker,store,admin,marketingScheduler;
     api.registerHttpRoute({path:initial.webhookPath,auth:'plugin',match:'exact',handler:async(req,res)=> {
+      if(!handler){res.statusCode=503;res.end('not ready');return true;}
+      return handler(req,res);
+    }});
+    api.registerHttpRoute({path:`${initial.webhookPath}/telegram`,auth:'plugin',match:'exact',handler:async(req,res)=> {
       if(!handler){res.statusCode=503;res.end('not ready');return true;}
       return handler(req,res);
     }});
@@ -30,15 +35,18 @@ export default definePluginEntry({
         try {
           store=new Store(c.database,c.pageId,{sessionTtlSeconds:c.sessionTtlSeconds});
           worker=new Worker(c,store,openClawCompletion(api),meta,notifier);
-          admin=await startAdmin(c,secrets,store);
-          handler=makeWebhook(c,secrets,store);
+          const marketing=createMarketing(c,store,openClawCompletion(api),meta,{notifier});
+          admin=await startAdmin(c,secrets,store,marketing);
+          handler=makeWebhook(c,secrets,store,marketing);
           worker.start(()=>api.logger.error('page-cskh: worker failed; inspect local operator status'));
+          marketingScheduler=marketing.start(()=>api.logger.error('page-cskh: marketing scheduler failed; inspect local operator status'));
           api.logger.info(`page-cskh ready (${c.mode}); operator console on loopback port ${c.adminPort}`);
         } catch(e) {store?.close();store=undefined;throw e;}
       },
       async stop() {
         handler=undefined;
         if(worker) await worker.stop();
+        marketingScheduler?.stop?.();
         if(admin) await new Promise(r=>admin.close(r));
         store?.close();store=undefined;
       }

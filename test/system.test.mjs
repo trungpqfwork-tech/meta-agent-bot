@@ -357,13 +357,15 @@ test('env is private and not injected into process environment',t=>{
   const {c}=fixture(t);const before=process.env.META_PAGE_ACCESS_TOKEN;loadSecrets(c.envFile,c.workspace);assert.equal(process.env.META_PAGE_ACCESS_TOKEN,before);
   chmodSync(c.envFile,0o644);assert.throws(()=>loadSecrets(c.envFile),/600/);
 });
-test('runtime env overrides mode and handoff controls',t=>{
+test('runtime env overrides mode, handoff controls, and marketing controls',t=>{
   const {c,secrets}=fixture(t);
-  const runtime=applyEnvOverrides(c,{...secrets,PAGE_CSKH_MODE:'live',PAGE_CSKH_WAITING_RESET_SECONDS:'12',PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'3',PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false'});
+  const runtime=applyEnvOverrides(c,{...secrets,PAGE_CSKH_MODE:'live',PAGE_CSKH_WAITING_RESET_SECONDS:'12',PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'3',PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',PAGE_CSKH_ENABLE_MARKETING_POSTS:'true',PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY:'5'});
   assert.equal(runtime.mode,'live');
   assert.equal(runtime.waitingResetSeconds,12);
   assert.equal(runtime.messageDebounceSeconds,3);
   assert.equal(runtime.enableHumanHandoff,false);
+  assert.equal(runtime.marketing.enabled,true);
+  assert.equal(runtime.marketing.maxPostsPerDay,5);
 });
 test('runtime config can be generated from private env',t=>{
   const {dir,secrets}=fixture(t);
@@ -381,7 +383,16 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_MESSAGE_DEBOUNCE_SECONDS:'4',
     PAGE_CSKH_MODE:'live',
     PAGE_CSKH_ENABLE_HUMAN_HANDOFF:'false',
-    PAGE_CSKH_SCOPE_KEYWORDS:'a,b,c'
+    PAGE_CSKH_SCOPE_KEYWORDS:'a,b,c',
+    PAGE_CSKH_ENABLE_MARKETING_POSTS:'true',
+    PAGE_CSKH_MARKETING_APPROVAL_REQUIRED:'true',
+    PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY:'7',
+    PAGE_CSKH_MARKETING_DEFAULT_TONE:'ấm áp',
+    PAGE_CSKH_MARKETING_TIMEZONE:'Asia/Ho_Chi_Minh',
+    PAGE_CSKH_MARKETING_QUIET_HOURS:'22:00-07:00',
+    PAGE_CSKH_MARKETING_MIN_SCORE:'7',
+    PAGE_CSKH_MARKETING_REVISE_ATTEMPTS:'2',
+    PAGE_CSKH_MARKETING_LOW_SCORE_ACTION:'hold'
   });
   const file=join(dir,'generated.json');writeFileSync(file,JSON.stringify(c));
   const loaded=loadConfig(file);
@@ -394,9 +405,21 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.messageDebounceSeconds,4);
   assert.equal(loaded.enableHumanHandoff,false);
   assert.deepEqual(loaded.scopeKeywords,['a','b','c']);
+  assert.deepEqual(loaded.marketing,{enabled:true,approvalRequired:true,maxPostsPerDay:7,defaultTone:'ấm áp',timezone:'Asia/Ho_Chi_Minh',quietHours:'22:00-07:00',minScore:7,reviseAttempts:2,lowScoreAction:'hold'});
 });
 test('config forbids secrets inside agent workspace',t=>{
   const {c,dir}=fixture(t);const file=join(dir,'config.json');c.envFile=join(c.workspace,'.env');writeFileSync(file,JSON.stringify(c));assert.throws(()=>loadConfig(file),/outside agent workspace/);
+});
+test('marketing score gate settings are validated',t=>{
+  const {c,dir}=fixture(t);const file=join(dir,'config.json');
+  const load=patch=>{writeFileSync(file,JSON.stringify({...c,marketing:{...(c.marketing??{}),enabled:true,...patch}}));return loadConfig(file);};
+  assert.throws(()=>load({minScore:11}),/Invalid marketing.minScore/);
+  assert.throws(()=>load({minScore:7,reviseAttempts:9}),/Invalid marketing.reviseAttempts/);
+  assert.throws(()=>load({minScore:7,lowScoreAction:'drop'}),/Invalid marketing.lowScoreAction/);
+  // A gate above what a no-image draft can reach (6/10) with no rewrite and no hold is a no-op gate.
+  assert.throws(()=>load({minScore:8,reviseAttempts:0,lowScoreAction:'warn'}),/revision/);
+  assert.equal(load({minScore:6,reviseAttempts:1,lowScoreAction:'warn'}).marketing.minScore,6);
+  assert.equal(load({minScore:8,reviseAttempts:0,lowScoreAction:'hold'}).marketing.lowScoreAction,'hold');
 });
 test('patch only targets dedicated agent and plugin',t=>{
   const {c}=fixture(t);const p=makePatch(c,'/config.json');assert.deepEqual(Object.keys(p.agents.entries),[c.agentId]);assert.deepEqual(p.agents.entries[c.agentId].tools.deny,['*']);assert.equal(p.agents.entries.main,undefined);

@@ -29,7 +29,7 @@ function textFile(file, value, mode=0o700) {
 
 try {
   const envFile = resolve(arg('--env') ?? '');
-  assert(envFile && process.argv.includes('--env'), 'Usage: npm run deploy-runtime -- --env /absolute/runtime/.env [--apply] [--start-pm2] [--restart-gateway]');
+  assert(envFile && process.argv.includes('--env'), 'Usage: npm run deploy-runtime -- --env /absolute/runtime/.env [--apply] [--start-pm2] [--restart-gateway] [--skip-telegram]');
   const runtimeDir = resolve(arg('--runtime') ?? dirname(envFile));
   const configFile = resolve(arg('--config') ?? `${runtimeDir}/config.json`);
   const edgeFile = resolve(arg('--edge') ?? `${runtimeDir}/edge.json`);
@@ -65,7 +65,7 @@ const c = JSON.parse(readFileSync(configFile, 'utf8'));
 assert(Number.isInteger(c.port) && c.port > 1024 && c.port < 65536, 'Invalid edge port');
 assert((statSync(c.envFile).mode & 0o077) === 0, 'Env must have mode 600');
 const secrets = parseEnv(readFileSync(c.envFile, 'utf8'));
-assert(secrets.META_WEBHOOK_VERIFY_TOKEN?.length >= 16 && secrets.META_APP_SECRET?.length >= 16, 'Required webhook secrets missing');
+assert(secrets.META_WEBHOOK_VERIFY_TOKEN?.length >= 16 && secrets.META_APP_SECRET?.length >= 16 && secrets.CSKH_ADMIN_TOKEN?.length >= 32, 'Required webhook secrets missing');
 c.logFile = resolve(dirname(configFile), 'logs', 'edge.log');
 const server = createEdge(c, secrets);
 server.requestTimeout = 15000;
@@ -137,6 +137,29 @@ for (const signal of ['SIGTERM','SIGINT']) process.on(signal, () => {
   if(has('--restart-gateway')) {
     run('systemctl', ['--user','restart','openclaw-gateway.service']);
     summary.gatewayRestarted = true;
+  }
+  // Telegram clears a bot's webhook whenever the gateway restarts, so re-register
+  // it. Phải set cho CẢ bot dịch vụ và bot admin: preview duyệt bài gửi từ bot
+  // admin, nếu bot đó không có webhook thì bấm nút trong preview không làm gì cả.
+  if(!has('--skip-telegram')) {
+    const base = (loaded.publicWebhookUrl || '').replace(/\/+$/,'');
+    const tokens = [...new Set([env.TELEGRAM_BOT_TOKEN, env.PAGE_CSKH_ADMIN_TELEGRAM_BOT_TOKEN].filter(Boolean))];
+    const results = [];
+    for(const token of tokens) {
+      if(!(base && env.CSKH_ADMIN_TOKEN)) { results.push({skipped:'missing CSKH_ADMIN_TOKEN or publicWebhookUrl'}); break; }
+      const url = `${base}/telegram`;
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${encodeURIComponent(token)}/setWebhook`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({url, secret_token: env.CSKH_ADMIN_TOKEN, allowed_updates:['message','callback_query']}),
+          signal: AbortSignal.timeout(15000)
+        });
+        const j = await r.json();
+        const me = await fetch(`https://api.telegram.org/bot${encodeURIComponent(token)}/getMe`, {signal:AbortSignal.timeout(15000)}).then(x=>x.json()).catch(()=>({}));
+        results.push({bot: me.result?.username ?? 'unknown', url, ok: j.ok === true, description: j.description ?? ''});
+      } catch(e) { results.push({url, ok:false, description:e.message}); }
+    }
+    summary.telegramWebhook = results.length === 1 ? results[0] : results;
   }
   console.log(JSON.stringify(summary, null, 2));
 } catch(e) {

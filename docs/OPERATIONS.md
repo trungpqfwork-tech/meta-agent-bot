@@ -51,6 +51,42 @@ Runtime `.env` controls:
   storage and metadata. Edit the catalog to add/remove image availability; it is
   read per job like KB. Moving the path needs config regeneration and Gateway
   restart.
+- `PAGE_CSKH_ENABLE_MARKETING_POSTS=false`: enables the admin-only Facebook Page
+  post workflow when set to `true`. Posts are still blocked in `draft` mode and
+  require approval.
+- `PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY=3`,
+  `PAGE_CSKH_MARKETING_TIMEZONE=Asia/Ho_Chi_Minh`, and
+  `PAGE_CSKH_MARKETING_QUIET_HOURS=22:00-07:00`: limits and scheduling policy
+  for approved marketing posts.
+- `PAGE_CSKH_MARKETING_MIN_SCORE`, `PAGE_CSKH_MARKETING_REVISE_ATTEMPTS`,
+  `PAGE_CSKH_MARKETING_LOW_SCORE_ACTION`: the draft quality gate on the
+  Telegram approval step. `MIN_SCORE=0` only displays the score;
+  `MIN_SCORE>0` makes the service rewrite a below-gate draft `REVISE_ATTEMPTS`
+  times (each rewrite is another model call), then either warn in the preview
+  (`warn`) or withhold it from Telegram (`hold`). Raise `MIN_SCORE` after the
+  image catalog has approved photos, since a draft with no approved image is
+  capped at 6/10 and can never pass a higher gate.
+
+## Facebook marketing posts
+
+Marketing posts are operated through the loopback admin API/UI using the same
+admin bearer token. Main routes:
+
+```text
+POST /marketing/draft
+GET  /marketing/posts
+POST /marketing/posts/{id}/approve
+POST /marketing/posts/{id}/schedule
+POST /marketing/posts/{id}/publish
+POST /marketing/posts/{id}/cancel
+POST /marketing/posts/{id}/reconcile
+GET  /marketing/permissions
+```
+
+Draft creation uses Hermes to write JSON from approved KB/image catalog data.
+Publishing uses Meta Graph API, then reads the post back and stores the permalink.
+If a publish is ambiguous, inspect the actual Page and reconcile; do not retry
+blindly.
 
 ## Webhook PM2 edge
 

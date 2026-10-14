@@ -12,6 +12,7 @@ import { startAdmin } from './admin.mjs';
 import { loadKnowledge } from './knowledge.mjs';
 import { createHermesCompletion } from './hermes.mjs';
 import { approvedImageNames } from './images.mjs';
+import { createMarketing } from './marketing.mjs';
 
 const IMAGE_TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.webp':'image/webp'};
 // Meta tải ảnh về theo URL công khai, nên edge phải phục vụ được /images/<tên file>.
@@ -46,12 +47,13 @@ export function createPageCskhService({
   logger=console
 }={}) {
   if(!configFile) throw new Error('configFile required');
-  let config,secrets,store,worker,adminServer,httpServer,handler,started=false;
+  let config,secrets,store,worker,adminServer,httpServer,handler,marketing,marketingScheduler,started=false;
   return {
     get config(){return config;},
     get secrets(){return secrets;},
     get store(){return store;},
     get worker(){return worker;},
+    get marketing(){return marketing;},
     async start() {
       if(started) return this;
       const base=loadConfig(configFile);
@@ -71,8 +73,9 @@ export function createPageCskhService({
       store=new Store(config.database,config.pageId,{sessionTtlSeconds:config.sessionTtlSeconds});
       complete ??= createHermesCompletion({model:config.model,hermesHome:config.hermesHome});
       worker=new Worker(config,store,complete,pageMeta,orderNotifier);
-      handler=makeWebhook(config,secrets,store);
-      if(shouldStartAdmin) adminServer=await startAdmin(config,secrets,store);
+      marketing=createMarketing(config,store,complete,pageMeta,{notifier:orderNotifier});
+      handler=makeWebhook(config,secrets,store,marketing);
+      if(shouldStartAdmin) adminServer=await startAdmin(config,secrets,store,marketing);
       if(startHttp) {
         httpServer=createServer((req,res)=>{
           if(servePublicImage(config,req,res)) return;
@@ -84,6 +87,7 @@ export function createPageCskhService({
         });
       }
       worker.start(e=>logger.error?.(`page-cskh worker failed: ${e?.message??e}`));
+      marketingScheduler=marketing.start(e=>logger.error?.(`page-cskh marketing scheduler failed: ${e?.message??e}`));
       started=true;
       logger.info?.(`page-cskh standalone ready (${config.mode})`);
       return this;
@@ -92,10 +96,11 @@ export function createPageCskhService({
       if(!started && !store && !httpServer && !adminServer) return;
       started=false;
       if(worker) await worker.stop();
+      marketingScheduler?.stop?.();
       if(httpServer) await new Promise(r=>httpServer.close(r));
       if(adminServer) await new Promise(r=>adminServer.close(r));
       store?.close();
-      worker=undefined;httpServer=undefined;adminServer=undefined;store=undefined;handler=undefined;
+      worker=undefined;httpServer=undefined;adminServer=undefined;store=undefined;handler=undefined;marketing=undefined;marketingScheduler=undefined;
     }
   };
 }

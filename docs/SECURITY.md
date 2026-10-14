@@ -3,7 +3,9 @@
 ## Secrets
 
 Required `.env`: META_APP_SECRET, META_WEBHOOK_VERIFY_TOKEN,
-META_PAGE_ACCESS_TOKEN, CSKH_ADMIN_TOKEN. No Facebook password/cookies.
+META_PAGE_ACCESS_TOKEN, CSKH_ADMIN_TOKEN. Optional `META_PAGE_PUBLISH_ACCESS_TOKEN`
+can separate Page post publishing from Messenger sends. No Facebook
+password/cookies.
 Model credentials belong to destination OpenClaw provider config, not this package.
 App Secret verifies HMAC SHA256 over raw POST bytes. Verify Token serves only GET
 handshake. Page token is used only for Graph requests. Admin token protects localhost
@@ -50,6 +52,9 @@ appropriate to your installation. Do not expose status/history unauthenticated.
 Admin listener binds loopback, checks Host, requires bearer token for every data or
 mutation API, has no permissive CORS and uses textContent for customer display.
 Use SSH tunneling for remote operators. No multi-user accounts/roles in this MVP.
+Marketing Page posts are admin-only: drafts and audits live in SQLite, publishing
+is disabled by default, approval is required, and customer webhooks cannot invoke
+post creation or publishing.
 Public ingress is limited to 1 MiB; deployment must add edge rate limits to protect
 disk/CPU. A call budget does not prevent webhook disk flooding.
 

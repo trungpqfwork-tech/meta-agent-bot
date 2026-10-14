@@ -25,6 +25,26 @@ export function loadConfig(file) {
   // forever, which is the old behaviour.
   c.sessionTtlSeconds ??= 21600;
   c.enableHumanHandoff ??= true;
+  c.marketing ??= {};
+  c.marketing.enabled ??= false;
+  c.marketing.approvalRequired ??= true;
+  c.marketing.maxPostsPerDay ??= 3;
+  c.marketing.defaultTone ??= 'thân thiện, chuyên nghiệp, ngắn gọn';
+  c.marketing.timezone ??= 'Asia/Ho_Chi_Minh';
+  c.marketing.quietHours ??= '22:00-07:00';
+  c.marketing.minScore ??= 0;
+  c.marketing.reviseAttempts ??= 1;
+  c.marketing.lowScoreAction ??= 'warn';
+  assert(typeof c.marketing.enabled === 'boolean', 'Invalid marketing.enabled');
+  assert(c.marketing.approvalRequired === true, 'marketing approval is required');
+  assert(Number.isInteger(c.marketing.maxPostsPerDay) && c.marketing.maxPostsPerDay > 0 && c.marketing.maxPostsPerDay <= 50, 'Invalid marketing.maxPostsPerDay');
+  assert(typeof c.marketing.defaultTone === 'string' && c.marketing.defaultTone.trim().length > 0 && c.marketing.defaultTone.length <= 500, 'Invalid marketing.defaultTone');
+  assert(typeof c.marketing.timezone === 'string' && c.marketing.timezone.trim().length > 0 && c.marketing.timezone.length <= 100, 'Invalid marketing.timezone');
+  assert(/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(c.marketing.quietHours), 'Invalid marketing.quietHours');
+  assert(Number.isInteger(c.marketing.minScore) && c.marketing.minScore >= 0 && c.marketing.minScore <= 10, 'Invalid marketing.minScore (0-10, 0 = no gate)');
+  assert(Number.isInteger(c.marketing.reviseAttempts) && c.marketing.reviseAttempts >= 0 && c.marketing.reviseAttempts <= 3, 'Invalid marketing.reviseAttempts (0-3)');
+  assert(['warn','hold'].includes(c.marketing.lowScoreAction), 'Invalid marketing.lowScoreAction (warn|hold)');
+  assert(c.marketing.minScore === 0 || c.marketing.minScore <= 6 || c.marketing.reviseAttempts > 0 || c.marketing.lowScoreAction === 'hold', 'minScore above 6 without a revision pass sends weak posts anyway; set reviseAttempts>0 or lowScoreAction=hold');
   assert(/^\/webhooks\/[a-z0-9/-]+$/.test(c.webhookPath), 'Invalid webhookPath');
   const u = new URL(c.publicWebhookUrl);
   assert(u.protocol === 'https:' && u.pathname === c.webhookPath && !u.search && !u.username && !u.password, 'Set HTTPS publicWebhookUrl matching webhookPath');
@@ -33,7 +53,9 @@ export function loadConfig(file) {
   assert(Number.isInteger(c.edgePort) && c.edgePort > 1024 && c.edgePort < 65536, 'Invalid edgePort');
   assert(c.edgePort !== c.adminPort, 'edgePort must differ from adminPort');
   c.orderTelegramChatIds ??= [];
+  c.adminTelegramAllowedUsers ??= [];
   assert(Array.isArray(c.orderTelegramChatIds) && c.orderTelegramChatIds.every(x => typeof x === 'string' && x.trim()), 'Invalid orderTelegramChatIds');
+  assert(Array.isArray(c.adminTelegramAllowedUsers) && c.adminTelegramAllowedUsers.every(x => typeof x === 'string' && x.trim()), 'Invalid adminTelegramAllowedUsers');
   for (const k of ['maxDailyAgentCalls','maxCustomerCallsPerHour','agentTimeoutMs']) assert(Number.isInteger(c[k]) && c[k] > 0, `Invalid ${k}`);
   assert(Number.isInteger(c.waitingResetSeconds) && c.waitingResetSeconds >= 0, 'Invalid waitingResetSeconds');
   assert(Number.isInteger(c.humanIdleResetSeconds) && c.humanIdleResetSeconds >= 0 && c.humanIdleResetSeconds <= 86400, 'Invalid humanIdleResetSeconds');
@@ -84,6 +106,10 @@ function envCsv(env, name, fallback) {
   assert(values.length > 0, `${name} must contain at least one value`);
   return values;
 }
+function envCsvOptional(env, name, fallback = '') {
+  const raw = env[name] ?? fallback;
+  return String(raw).split(',').map(x => x.trim()).filter(Boolean);
+}
 function envJsonArray(env, name, fallback = '[]') {
   const raw = env[name] ?? fallback;
   let values;
@@ -91,6 +117,19 @@ function envJsonArray(env, name, fallback = '[]') {
   catch { throw new Error(`${name} must be a JSON array`); }
   assert(Array.isArray(values), `${name} must be a JSON array`);
   return values.map(x => String(x).trim()).filter(Boolean);
+}
+function marketingConfigFromEnv(env) {
+  return {
+    enabled: parseBool(envText(env, 'PAGE_CSKH_ENABLE_MARKETING_POSTS', 'false').toLowerCase(), 'PAGE_CSKH_ENABLE_MARKETING_POSTS'),
+    approvalRequired: parseBool(envText(env, 'PAGE_CSKH_MARKETING_APPROVAL_REQUIRED', 'true').toLowerCase(), 'PAGE_CSKH_MARKETING_APPROVAL_REQUIRED'),
+    maxPostsPerDay: envInt(env, 'PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY', 3),
+    defaultTone: envText(env, 'PAGE_CSKH_MARKETING_DEFAULT_TONE', 'thân thiện, chuyên nghiệp, ngắn gọn'),
+    timezone: envText(env, 'PAGE_CSKH_MARKETING_TIMEZONE', 'Asia/Ho_Chi_Minh'),
+    quietHours: envText(env, 'PAGE_CSKH_MARKETING_QUIET_HOURS', '22:00-07:00'),
+    minScore: envInt(env, 'PAGE_CSKH_MARKETING_MIN_SCORE', 0),
+    reviseAttempts: envInt(env, 'PAGE_CSKH_MARKETING_REVISE_ATTEMPTS', 1),
+    lowScoreAction: envText(env, 'PAGE_CSKH_MARKETING_LOW_SCORE_ACTION', 'warn')
+  };
 }
 
 export function runtimeConfigFromEnv(env) {
@@ -121,6 +160,7 @@ export function runtimeConfigFromEnv(env) {
     adminPort: envInt(env, 'PAGE_CSKH_ADMIN_PORT', 18891),
     edgePort: envInt(env, 'PAGE_CSKH_EDGE_PORT', 18892),
     orderTelegramChatIds: envJsonArray(env, 'PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS', '[]'),
+    adminTelegramAllowedUsers: envCsvOptional(env, 'PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS', ''),
     mode,
     waitingResetSeconds: envInt(env, 'PAGE_CSKH_WAITING_RESET_SECONDS', 0),
     sessionTtlSeconds: envInt(env, 'PAGE_CSKH_SESSION_TTL_SECONDS', 21600),
@@ -134,7 +174,8 @@ export function runtimeConfigFromEnv(env) {
     clarifyText: envText(env, 'PAGE_CSKH_CLARIFY_TEXT', 'Anh/chị muốn tìm hiểu sản phẩm hoặc dịch vụ nào của bên em ạ?'),
     maxDailyAgentCalls: envInt(env, 'PAGE_CSKH_MAX_DAILY_AGENT_CALLS', 200),
     maxCustomerCallsPerHour: envInt(env, 'PAGE_CSKH_MAX_CUSTOMER_CALLS_PER_HOUR', 20),
-    agentTimeoutMs: envInt(env, 'PAGE_CSKH_AGENT_TIMEOUT_MS', 45000)
+    agentTimeoutMs: envInt(env, 'PAGE_CSKH_AGENT_TIMEOUT_MS', 45000),
+    marketing: marketingConfigFromEnv(env)
   };
 }
 
@@ -169,6 +210,20 @@ export function applyEnvOverrides(config, env) {
   }
   if (env.PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS) {
     c.orderTelegramChatIds = envJsonArray(env, 'PAGE_CSKH_ORDER_TELEGRAM_CHAT_IDS');
+  }
+  if (env.PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS) {
+    c.adminTelegramAllowedUsers = envCsvOptional(env, 'PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS');
+  }
+  if (env.PAGE_CSKH_ENABLE_MARKETING_POSTS || env.PAGE_CSKH_MARKETING_APPROVAL_REQUIRED || env.PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY || env.PAGE_CSKH_MARKETING_DEFAULT_TONE || env.PAGE_CSKH_MARKETING_TIMEZONE || env.PAGE_CSKH_MARKETING_QUIET_HOURS) {
+    c.marketing = {...(c.marketing ?? {}), ...marketingConfigFromEnv({...{
+      PAGE_CSKH_ENABLE_MARKETING_POSTS: String(c.marketing?.enabled ?? false),
+      PAGE_CSKH_MARKETING_APPROVAL_REQUIRED: String(c.marketing?.approvalRequired ?? true),
+      PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY: String(c.marketing?.maxPostsPerDay ?? 3),
+      PAGE_CSKH_MARKETING_DEFAULT_TONE: c.marketing?.defaultTone ?? 'thân thiện, chuyên nghiệp, ngắn gọn',
+      PAGE_CSKH_MARKETING_TIMEZONE: c.marketing?.timezone ?? 'Asia/Ho_Chi_Minh',
+      PAGE_CSKH_MARKETING_QUIET_HOURS: c.marketing?.quietHours ?? '22:00-07:00'
+    }, ...env})};
+    assert(c.marketing.approvalRequired === true, 'marketing approval is required');
   }
   return c;
 }
