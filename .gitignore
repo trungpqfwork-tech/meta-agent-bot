@@ -19,3 +19,6 @@ knowledge.json
 products.json
 *.bak-*
 *.pre-import-bak
+# Core dumps from node/libuv aborts (uv__io_poll: Assertion `errno == EEXIST')
+# raised by admin-agent scratch scripts; they land in the repo working dir.
+core.*
