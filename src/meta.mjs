@@ -69,12 +69,42 @@ export function metaClient(config,secrets,fetcher=fetch) {
       return j.attachment_id;
     },
     async probePostPermissions() {
+      // A Page token cannot read /me/permissions — Graph answers 400 code=100
+      // "Tried accessing nonexisting field (permissions)", which is an endpoint
+      // limitation, not a missing grant. Read the token's own grant with
+      // debug_token instead; that needs an app access token (app_id|app_secret)
+      // while the Page token goes in input_token.
       const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
-      const r=await fetcher(`${base}/me/permissions`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(10000)});
-      if(!r.ok) throw new Error('Meta post permission probe failed');
-      const data=(await r.json()).data ?? [];
-      const granted=data.filter(x=>x.status==='granted').map(x=>x.permission);
-      return {granted,missing:['pages_manage_posts','pages_read_engagement','pages_show_list'].filter(x=>!granted.includes(x))};
+      const appToken=`${config.appId}|${secrets.META_APP_SECRET}`;
+      const qs=new URLSearchParams({input_token:token,access_token:appToken});
+      const r=await fetcher(`${base}/debug_token?${qs}`,{signal:AbortSignal.timeout(10000)});
+      if(!r.ok) throw await metaError(r,'Meta token probe failed');
+      const data=(await r.json()).data ?? {};
+      const scopes=Array.isArray(data.scopes)?data.scopes.map(String):[];
+      // granular_scopes carries target_ids: a grant limited to those Pages. A scope
+      // granted only for a different Page is unusable here, so treat it as missing.
+      const scopeTargets=new Map((Array.isArray(data.granular_scopes)?data.granular_scopes:[])
+        .map(g=>[String(g?.scope??''),Array.isArray(g?.target_ids)?g.target_ids.map(String):null]));
+      const granted=[],missing=[],wrongPage=[];
+      for(const need of ['pages_manage_posts','pages_read_engagement','pages_show_list']) {
+        if(!scopes.includes(need)) { missing.push(need); continue; }
+        const targets=scopeTargets.get(need);
+        if(targets && !targets.includes(String(config.pageId))) {
+          wrongPage.push(need); missing.push(need); continue;
+        }
+        granted.push(need);
+      }
+      return {
+        granted,
+        missing,
+        wrongPage,
+        tokenType:String(data.type??''),
+        tokenPageId:String(data.profile_id??''),
+        pageMatches:String(data.profile_id??'')===String(config.pageId),
+        valid:data.is_valid===true,
+        expiresAt:Number(data.expires_at??0),
+        scopes
+      };
     },
     async listPublishedPosts({limit=12}={}) {
       const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
