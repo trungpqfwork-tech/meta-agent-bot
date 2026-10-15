@@ -11,6 +11,14 @@ function approvedDocs(file) {
     return docs.filter(d=>d.approved===true && (!d.validUntil || Date.parse(d.validUntil)>now)).slice(0,80);
   } catch { return []; }
 }
+// Tài liệu liên hệ (hotline) luôn phải vào prompt viết bài, kể cả khi source_ids
+// chỉ chọn tài liệu sản phẩm: mọi bài đăng đều phải có hotline của Page.
+const CONTACT_DOC_ID=/^(policy|brand|contact|info)[-_]?(hotline|contact|lien-?he)/i;
+export function withContactDocs(docs, allDocs) {
+  const contact=arr(allDocs).filter(d=>CONTACT_DOC_ID.test(String(d?.id??'')) || /hotline/i.test(String(d?.title??'')));
+  const have=new Set(arr(docs).map(d=>d?.id));
+  return [...arr(docs), ...contact.filter(d=>!have.has(d.id))];
+}
 function approvedImages(file, limit=50) {
   try {
     const images=loadImageCatalog(file).filter(i=>i.approved===true);
@@ -284,7 +292,7 @@ FORMAT BẮT BUỘC cho caption, theo bài mẫu đẹp:
 3. Một block "✅ Chế biến đa dạng:" rồi 2-5 dòng món/cách chế biến nếu KB có món/cách dùng rõ ràng. Nếu KB chỉ nói nhóm khách/hoàn cảnh dùng (nhà hàng, quán ăn, bếp ăn, nấu cỗ, tiệc) mà không nêu món cụ thể, ĐỔI THÀNH block "✅ Phù hợp cho:" và chỉ liệt kê nhóm khách/hoàn cảnh. Không tự thêm món như xào sả ớt, nấu chua, hấp mật ong, salad, khoai lang, bánh nếp, mâm cỗ.
 4. Một dòng định vị: "💯 ${config.pageName} - ..." nêu vai trò cho nhà hàng, quán ăn, bếp ăn, đại lý nếu KB hỗ trợ. Không tự nhận số 1/uy tín/chất lượng vượt trội.
 5. 2-4 dòng checklist bắt đầu bằng "✔" về nguồn gốc/cách dùng/đối tượng khách nếu có nguồn. Không viết hàng sẵn, giao hàng, giá tốt, giá mềm, báo giá sỉ/lẻ theo thị trường, hỗ trợ cắt nếu KB/admin prompt không nói rõ.
-6. CTA cuối: "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn". Chỉ ghi số điện thoại nếu admin prompt hoặc KB có số.
+6. CTA cuối: nếu tài liệu có hotline thì BẮT BUỘC thêm dòng "📞 Hotline: <đủ các số trong tài liệu>" (giữ nguyên số, không rút gọn, không thêm số khác), rồi tới dòng "💬 Inbox/comment để được tư vấn". Nếu tài liệu không có số thì dùng "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn".
 7. Hashtags: trả về 4-6 cụm từ khoá ngắn, KHÔNG dấu, KHÔNG ký tự # (ví dụ: "bap hoa bo", "thit bo nhap khau", "thuc pham dong lanh"). Hệ thống tự ghép thành hashtag chuẩn.
 8. Ảnh: danh sách "Ảnh liên quan" bên dưới ĐÃ ĐƯỢC LỌC theo chủ đề. Chọn TỐI THIỂU 3 ảnh (tối đa 6) nếu danh sách có từ 3 ảnh, xếp theo thứ tự muốn đăng, chỉ dùng image_id trong danh sách đó: media [{"type":"image","image_id":"..."}]. Chỉ khi danh sách dưới 3 ảnh mới lấy hết và thêm risk_flags "fewer_images_than_min".
 
@@ -328,7 +336,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
   async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[]}) {
     const allDocs=approvedDocs(config.knowledgeFile), allImages=approvedImages(config.imageCatalogFile);
     const allowed=new Set(arr(sourceIds));
-    const docs=allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs;
+    const docs=withContactDocs(allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs, allDocs);
     const shortlist=selectPostImages(config,{query:prompt,docs,exclude:excludeImageIds});
     const images=shortlist.length ? shortlist : allImages;
     const minScore=Number(config.marketing?.minScore??0);
@@ -388,7 +396,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     const sourceSet=new Set(docs.map(d=>d.id));
     const sourceIds=arr(chosen.source_ids).map(x=>String(x).trim()).filter(id=>sourceSet.has(id)).slice(0,8);
     if(!String(chosen.prompt??chosen.topic??'').trim()) throw new Error('Auto topic chooser returned no topic');
-    const selectedDocs=sourceIds.length?docs.filter(d=>sourceIds.includes(d.id)):[];
+    const selectedDocs=withContactDocs(sourceIds.length?docs.filter(d=>sourceIds.includes(d.id)):[], docs);
     const prompt=[
       `AUTO_TOPIC: ${String(chosen.topic??'').slice(0,200)}`,
       instruction?`Yêu cầu admin: ${String(instruction).slice(0,500)}`:'',

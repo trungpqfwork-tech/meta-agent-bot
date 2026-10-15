@@ -488,3 +488,22 @@ test('trần tài liệu 80: sản phẩm thứ 60 vẫn vào được prompt ch
   assert.ok(calls[1].length<40000, 'prompt viết bài phải nằm trong ngân sách ký tự');
   assert.match(post.topic,/Sản phẩm 60/);
 });
+
+test('tài liệu hotline luôn được đưa vào prompt viết bài dù source_ids chỉ chọn sản phẩm',async t=>{
+  const {c,s}=fixture(t,'live');
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[
+    {id:'product-salmon',title:'Cá hồi',keywords:['cá hồi'],content:'Cá hồi Na Uy cắt khúc.',approved:true,validUntil:null},
+    {id:'policy-hotline',title:'Hotline liên hệ Test Page',keywords:['hotline','số điện thoại'],content:'Hotline Test Page: 0976778755 và 0962365073.',approved:true,validUntil:null}
+  ]}));
+  const calls=[];
+  const complete=async ({message})=>{ calls.push(message);
+    if(calls.length===1) return JSON.stringify({topic:'Cá hồi',prompt:'Viết bài cá hồi',source_ids:['product-salmon'],reason:'x'});
+    return JSON.stringify({title_internal:'Cá hồi',caption:'🐟 CÁ HỒI NAUY CẮT KHÚC\n\n🔥 Cá hồi Na Uy cắt khúc, phù hợp nhà hàng, quán ăn, bếp ăn.\n\n📞 Hotline: 0976778755 - 0962365073\n💬 Inbox/comment để được tư vấn.',hashtags:['ca hoi'],cta:'Hotline',media:[],source_ids:['product-salmon'],risk_flags:[]});
+  };
+  const marketing=createMarketing(c,s,complete,{listPublishedPosts:async()=>[]});
+  const post=await marketing.createAutoDraft({instruction:'test'});
+  assert.match(calls[1],/0976778755/);
+  assert.match(calls[1],/policy-hotline/);
+  assert.match(calls[1],/BẮT BUỘC thêm dòng/);
+  assert.match(post.caption,/0976778755/);
+});
