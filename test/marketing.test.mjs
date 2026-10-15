@@ -610,3 +610,11 @@ test('auto-draft: bài tôm thẻ lấy đúng ảnh tôm, không bị ảnh hà
   // ảnh mặt hàng phải đứng trước ảnh khác trong danh sách gửi model
   assert.ok(calls[1].indexOf('tom-1') < calls[1].indexOf('khac-0'),'ảnh tôm phải xếp trước ảnh khác');
 });
+
+test('dòng hotline được chuẩn hoá về "và" giữa 2 số',async ()=>{
+  const {normalizeHotlineLine}=await import('../src/marketing.mjs');
+  assert.equal(normalizeHotlineLine('📞 Hotline: 0976778755 – 0962365073').caption,'📞 Hotline: 0976778755 và 0962365073');
+  assert.equal(normalizeHotlineLine('📞 Hotline: 0976778755 - 0962365073').caption,'📞 Hotline: 0976778755 và 0962365073');
+  assert.equal(normalizeHotlineLine('📞 Hotline: 0976778755 và 0962365073').changed,false);
+  assert.equal(normalizeHotlineLine('💬 Inbox để được tư vấn').changed,false);
+});
