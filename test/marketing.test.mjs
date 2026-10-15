@@ -446,3 +446,25 @@ test('id ảnh ngoài danh sách bị loại kèm cờ, bài vẫn tạo đượ
   assert.ok(media.length>=3);
   assert.ok(media.every(m=>m.image_id.startsWith('ga-')));
 });
+
+test('bộ chọn chủ đề thấy mọi sản phẩm KB, kể cả sản phẩm/ảnh thêm sau',async t=>{
+  const {c,s}=fixture(t,'live');
+  const docs=[];
+  for(let i=1;i<=45;i++) docs.push({id:`product-p${String(i).padStart(2,'0')}`,title:`Sản phẩm ${i}`,keywords:[`sp${i}`],content:`Tên sản phẩm: Sản phẩm ${i}\nNhóm: test\nẢnh: anh-sp${i}-1`,approved:true,validUntil:null});
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:docs}));
+  const images=[];
+  for(let i=1;i<=60;i++) images.push({id:`img-${i}`,title:`Ảnh ${i}`,keywords:[`sp${i}`],file:`img-${i}.jpg`,caption:'',approved:true});
+  // Ảnh của sản phẩm cuối nằm ngoài 50 ảnh đầu: bộ chọn chủ đề vẫn phải thấy.
+  images.push({id:'anh-sp45-1',title:'Ảnh sản phẩm 45',keywords:['sp45'],file:'anh-sp45-1.jpg',caption:'',approved:true});
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images}));
+  const calls=[];
+  const complete=async ({message})=>{
+    calls.push(message);
+    if(calls.length===1) return JSON.stringify({topic:'Sản phẩm 45',prompt:'Viết bài sản phẩm 45',source_ids:['product-p45'],reason:'có ảnh'});
+    return JSON.stringify({title_internal:'Sản phẩm 45',caption:'🔥 Sản phẩm 45 phù hợp nhà hàng, quán ăn, bếp ăn.\n\n💬 Inbox để được tư vấn.',hashtags:['tmfood'],cta:'Inbox để được tư vấn',media:[],source_ids:['product-p45'],risk_flags:[]});
+  };
+  const post=await createMarketing(c,s,complete,{listPublishedPosts:async()=>[]}).createAutoDraft({instruction:'test'});
+  assert.match(calls[0],/"id":"product-p45"/);
+  assert.match(calls[0],/"id":"product-p45"[^}]*"hasImage":true/);
+  assert.match(post.topic,/Sản phẩm 45/);
+});
