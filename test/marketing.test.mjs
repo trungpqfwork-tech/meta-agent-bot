@@ -568,3 +568,45 @@ test('admin API nhận route /delete và gọi marketing.deletePost',async t=>{
   assert.equal(res.status,200);
   assert.equal(deletedId,'abc/1');
 });
+
+test('ảnh tài liệu gán vẫn đứng đầu danh sách gửi model dù bài trước đã dùng',async t=>{
+  const {c}=fixture(t,'live');
+  const images=[
+    {id:'tom-1',title:'Tôm thẻ hấp',keywords:['tôm thẻ hấp'],file:'tom-1.jpg',approved:true},
+    {id:'tom-2',title:'Tôm thẻ hấp',keywords:['tôm thẻ hấp'],file:'tom-2.jpg',approved:true},
+    ...Array.from({length:14},(_,i)=>({id:'khac-'+i,title:'Thùng carton kho lạnh nhà hàng quán ăn',keywords:['thùng','kho lạnh','nhà hàng','quán ăn','thực phẩm đông lạnh'],file:'k.jpg',approved:true}))
+  ];
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images}));
+  const list=selectPostImages(c,{query:'Tôm thẻ hấp bán buôn theo thùng cho nhà hàng quán ăn bếp ăn',docs:[{id:'product-tom',content:'Tôm thẻ hấp Việt Nam. Ảnh: tom-1, tom-2.'}],exclude:['tom-1','tom-2']});
+  assert.equal(list[0].id,'tom-1');
+  assert.equal(list[1].id,'tom-2');
+});
+
+test('auto-draft: bài tôm thẻ lấy đúng ảnh tôm, không bị ảnh hàng khác thay thế',async t=>{
+  const {c,s}=fixture(t,'live');
+  const images=[
+    {id:'tom-1',title:'Tôm thẻ hấp',keywords:['tôm thẻ hấp'],file:'tom-1.jpg',approved:true},
+    {id:'tom-2',title:'Tôm thẻ hấp',keywords:['tôm thẻ hấp'],file:'tom-2.jpg',approved:true},
+    {id:'tom-3',title:'Tôm thẻ hấp',keywords:['tôm thẻ hấp'],file:'tom-3.jpg',approved:true},
+    ...Array.from({length:14},(_,i)=>({id:'khac-'+i,title:'Thùng carton kho lạnh nhà hàng quán ăn',keywords:['thùng','kho lạnh','nhà hàng','quán ăn','thực phẩm đông lạnh'],file:'k.jpg',approved:true}))
+  ];
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images}));
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[
+    {id:'product-tom',title:'Tôm thẻ hấp size 25/28',keywords:['tôm thẻ hấp'],content:'Tôm thẻ hấp Việt Nam, quy cách thùng 10kg. Ảnh: tom-1, tom-2, tom-3. Giá buôn 275.000đ/kg.',approved:true,validUntil:null},
+    {id:'policy-hotline',title:'Hotline',keywords:['hotline'],content:'Hotline Test Page: 0976778755 và 0962365073.',approved:true,validUntil:null}
+  ]}));
+  // bài trước đã dùng cả 3 ảnh tôm: không được vì thế mà lấy ảnh hàng khác
+  s.createMarketingPost({title_internal:'Tôm',caption:'x',hashtags:'[]',media:JSON.stringify([{type:'image',image_id:'tom-1'},{type:'image',image_id:'tom-2'},{type:'image',image_id:'tom-3'}]),source_ids:'[]'});
+  const calls=[];
+  const complete=async ({message})=>{ calls.push(message);
+    if(calls.length===1) return JSON.stringify({topic:'Tôm thẻ hấp',prompt:'Viết bài tôm thẻ hấp bán buôn',source_ids:['product-tom'],reason:'x'});
+    return JSON.stringify({title_internal:'Tôm thẻ hấp',caption:'🦐 TÔM THẺ HẤP\n\n🔥 Tôm thẻ hấp Việt Nam, quy cách thùng 10kg.\n\n📞 Hotline: 0976778755 và 0962365073\n💬 Inbox/comment để được tư vấn',hashtags:['tom the'],cta:'Hotline',media:[],source_ids:['product-tom'],risk_flags:[]});
+  };
+  const marketing=createMarketing(c,s,complete,{listPublishedPosts:async()=>[]});
+  const post=await marketing.createAutoDraft({instruction:'Tôm thẻ hấp cho nhà hàng'});
+  const ids=JSON.parse(post.media).map(m=>m.image_id);
+  assert.deepEqual(ids,['tom-1','tom-2','tom-3']);
+  assert.match(calls[1],/tom-1/);
+  // ảnh mặt hàng phải đứng trước ảnh khác trong danh sách gửi model
+  assert.ok(calls[1].indexOf('tom-1') < calls[1].indexOf('khac-0'),'ảnh tôm phải xếp trước ảnh khác');
+});
