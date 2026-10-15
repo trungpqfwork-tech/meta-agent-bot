@@ -233,6 +233,8 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     risk_flags:arr(raw.risk_flags).map(x=>String(x).trim()).filter(Boolean).slice(0,20)
   };
   if(!draft.caption) throw new Error('Marketing caption required');
+  const hotlineFixed=normalizeHotlineLine(draft.caption);
+  if(hotlineFixed.changed) draft.caption=hotlineFixed.caption;
   const priceStripped=stripPriceLines(draft.caption);
   if(priceStripped.removed.length) {
     if(priceStripped.caption) draft.caption=priceStripped.caption;
@@ -264,6 +266,21 @@ export function stripPriceLines(caption) {
     caption: kept.join('\n').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+$/gm,'').trim(),
     removed: removed.map(l=>l.trim()).filter(Boolean)
   };
+}
+// Chủ Page chốt định dạng hotline: "📞 Hotline: 0976778755 và 0962365073". Model hay
+// chèn gạch ngang/gạch dài giữa 2 số, chuẩn hoá lại cho đúng.
+export function normalizeHotlineLine(caption) {
+  let changed=false;
+  const out=String(caption??'').split('\n').map(line=>{
+    if(!/hotline/i.test(line)) return line;
+    const nums=line.match(/(?:\+?84|0)\d{8,10}/g);
+    if(!nums || nums.length<2) return line;
+    const prefix=line.slice(0,line.indexOf(nums[0])).replace(/[\s:–—\-/]+$/,'').trim();
+    const rebuilt=prefix+': '+nums.join(' và ');
+    if(rebuilt!==line.trim()) changed=true;
+    return rebuilt;
+  });
+  return {caption:out.join('\n'),changed};
 }
 function isProductishDoc(d) {
   return /^product-|^category-|^usage-|^brand-/.test(String(d.id??''));
@@ -328,7 +345,7 @@ FORMAT BẮT BUỘC cho caption, theo bài mẫu đẹp:
 3. Một block "✅ Chế biến đa dạng:" rồi 2-5 dòng món/cách chế biến nếu KB có món/cách dùng rõ ràng. Nếu KB chỉ nói nhóm khách/hoàn cảnh dùng (nhà hàng, quán ăn, bếp ăn, nấu cỗ, tiệc) mà không nêu món cụ thể, ĐỔI THÀNH block "✅ Phù hợp cho:" và chỉ liệt kê nhóm khách/hoàn cảnh. Không tự thêm món như xào sả ớt, nấu chua, hấp mật ong, salad, khoai lang, bánh nếp, mâm cỗ.
 4. Một dòng định vị: "💯 ${config.pageName} - ..." nêu vai trò cho nhà hàng, quán ăn, bếp ăn, đại lý nếu KB hỗ trợ. Không tự nhận số 1/uy tín/chất lượng vượt trội.
 5. 2-4 dòng checklist bắt đầu bằng "✔" về nguồn gốc/cách dùng/đối tượng khách nếu có nguồn. Không viết hàng sẵn, giao hàng, giá tốt, giá mềm, báo giá sỉ/lẻ theo thị trường, hỗ trợ cắt nếu KB/admin prompt không nói rõ.
-6. CTA cuối: nếu tài liệu có hotline thì BẮT BUỘC thêm dòng "📞 Hotline: <đủ các số trong tài liệu>" (giữ nguyên số, không rút gọn, không thêm số khác), rồi tới dòng "💬 Inbox/comment để được tư vấn". Nếu tài liệu không có số thì dùng "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn".
+6. CTA cuối: nếu tài liệu có hotline thì BẮT BUỘC thêm dòng "📞 Hotline: <đủ các số trong tài liệu>" (giữ nguyên số, không rút gọn, không thêm số khác; giữa 2 số dùng chữ "và", không dùng gạch ngang/gạch dài), rồi tới dòng "💬 Inbox/comment để được tư vấn". Nếu tài liệu không có số thì dùng "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn".
 7. Hashtags: trả về 4-6 cụm từ khoá ngắn, KHÔNG dấu, KHÔNG ký tự # (ví dụ: "bap hoa bo", "thit bo nhap khau", "thuc pham dong lanh"). Hệ thống tự ghép thành hashtag chuẩn.
 8. Ảnh: danh sách "Ảnh liên quan" bên dưới ĐÃ ĐƯỢC LỌC theo chủ đề. Chọn TỐI THIỂU 3 ảnh (tối đa 6) nếu danh sách có từ 3 ảnh, xếp theo thứ tự muốn đăng, chỉ dùng image_id trong danh sách đó: media [{"type":"image","image_id":"..."}]. Chỉ khi danh sách dưới 3 ảnh mới lấy hết và thêm risk_flags "fewer_images_than_min".
 
