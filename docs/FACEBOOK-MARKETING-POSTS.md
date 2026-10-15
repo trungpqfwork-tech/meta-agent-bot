@@ -495,6 +495,23 @@ Rules:
 - Does not publish if service mode is draft.
 - On startup, inspects stale `publishing` rows and moves them to `unknown` for operator reconciliation.
 
+## Daily posting flow (vận hành)
+
+Bài hằng ngày không tự đăng: một job Hermes gọi admin API để tạo nháp, người duyệt bấm nút.
+
+```text
+POST /marketing/auto-draft  → chọn chủ đề từ KB, viết bài, tự chấm điểm
+  → nháp pending_approval + preview Telegram cho người duyệt (Duyệt / Đăng ngay)
+  → POST /marketing/posts/{id}/approve → POST /marketing/posts/{id}/publish
+```
+
+- Cron trên máy này: `~/.hermes/profiles/cskh-admin/scripts/daily-marketing-draft.sh`
+  (09:00 mỗi ngày). Script chỉ gọi admin API của service, không tự publish, không in token.
+- Bộ chọn chủ đề phải thấy **toàn bộ** tài liệu đã duyệt (trần 80) và **toàn bộ** ảnh đã
+  duyệt; cắt theo số lượng cứng làm sản phẩm/ảnh thêm sau không bao giờ được chọn.
+- Kích thước prompt viết bài chặn bằng ngân sách ký tự (`docPayload`, 24KB), không cắt
+  tài liệu theo số lượng.
+
 ## Acceptance criteria
 
 The implementation is complete only when all pass:
