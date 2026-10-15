@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseModelJson, normalize } from './knowledge.mjs';
-import { loadImageCatalog, imageFilePath, publicImageUrl } from './images.mjs';
+import { loadImageCatalog, imageFilePath, publicImageUrl, imageScores } from './images.mjs';
 import { scoreMarketingSeo } from './seoscore.mjs';
 
 function approvedDocs(file) {
@@ -16,6 +16,50 @@ function approvedImages(file) {
   catch { return []; }
 }
 function arr(value) { return Array.isArray(value) ? value : []; }
+// Ảnh của bài marketing phải được LỌC trước khi đưa cho model: kho đã hơn 200 bản
+// ghi, dán cả kho vào prompt thì model trả media rỗng và bài lên Page không có
+// ảnh (ca thật 15/10/2026). Dùng đúng bộ khớp từ khoá của CSKH (imageScores:
+// trọng số IDF theo từng từ, khớp trọn trước khớp một phần) để lấy danh sách ngắn
+// theo chủ đề, rồi mới để model chọn thứ tự đăng.
+export function selectPostImages(config, {query='', caption='', docs=[], exclude=[], limit=12}={}) {
+  let catalog;
+  try { catalog = loadImageCatalog(config.imageCatalogFile).filter(i=>i.approved===true); }
+  catch { return []; }
+  if(!catalog.length) return [];
+  const trim = img => ({id:img.id, title:img.title, keywords:arr(img.keywords), caption:img.caption});
+  const ranked=[];
+  const push = list => { for(const img of list) if(img?.id && !ranked.some(x=>x.id===img.id)) ranked.push(img); };
+  push(imageScores(catalog, String(query ?? '').slice(0,1200)));
+  if(ranked.length < limit) {
+    const terms=[caption, ...arr(docs).flatMap(d=>[d.title, ...arr(d.keywords)])].filter(Boolean).join(' ');
+    if(String(terms).trim()) push(imageScores(catalog, String(terms).slice(0,1200)));
+  }
+  const blocked=new Set(arr(exclude).map(String));
+  const fresh=ranked.filter(i=>!blocked.has(i.id));
+  // Ảnh vừa dùng ở bài trước bị đẩy xuống cuối, chỉ quay lại khi chủ đề không còn
+  // đủ ảnh mới: bài cùng sản phẩm đăng lại không được lặp y nguyên bộ ảnh cũ.
+  const ordered=[...fresh, ...ranked.filter(i=>blocked.has(i.id))];
+  return ordered.slice(0, Math.max(1, Number(limit)||12)).map(trim);
+}
+// Model chỉ được chọn ảnh trong danh sách ngắn; nếu vẫn trả thiếu thì điền thêm
+// theo thứ tự khớp để mỗi bài có tối thiểu minImagesPerPost ảnh.
+export function ensureMinMedia(media, images, {min=3, max=6}={}) {
+  const floor=Math.max(1, Number(min)||1), cap=Math.max(floor, Number(max)||floor);
+  const out=[], seen=new Set();
+  for(const m of arr(media)) {
+    const id = m && m.type==='image' ? String(m.image_id ?? '').trim() : '';
+    if(!id || seen.has(id)) continue;
+    seen.add(id); out.push({type:'image', image_id:id});
+    if(out.length>=cap) break;
+  }
+  for(const img of arr(images)) {
+    if(out.length>=floor || out.length>=cap) break;
+    const id=String(img?.id ?? '').trim();
+    if(!id || seen.has(id)) continue;
+    seen.add(id); out.push({type:'image', image_id:id});
+  }
+  return {media:out, enough: out.length>=floor};
+}
 // Hashtag phải có '#' và không lặp lại trong caption, và phải được GẮN vào nội dung
 // đăng: nếu chỉ lưu riêng ở cột hashtags thì bài lên Facebook không có hashtag nào.
 function normalizeHashtag(tag) {
@@ -102,6 +146,14 @@ export function resolveMarketingImage(config, media) {
   if(url) return {url, filePath:local};
   return local ? {url:'', filePath:local} : null;
 }
+export function resolveMarketingImages(config, media, max=6) {
+  const out=[];
+  for(const m of arr(media).slice(0, Math.max(1, Number(max)||6))) {
+    const one=resolveMarketingImage(config, [m]);
+    if(one) out.push(one);
+  }
+  return out;
+}
 function cleanCaption(text) {
   return String(text ?? '')
     .split(/\r?\n/)
@@ -118,7 +170,7 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     caption:caption.slice(0,5000),
     hashtags:buildHashtags(config,{prompt:topic,caption,modelTags:raw.hashtags}),
     cta:String(raw.cta??'').trim().slice(0,500),
-    media:arr(raw.media).slice(0,5),
+    media:arr(raw.media).slice(0,6),
     link:String(raw.link??'').trim().slice(0,1000),
     source_ids:arr(raw.source_ids).map(x=>String(x).trim()).filter(Boolean).slice(0,20),
     risk_flags:arr(raw.risk_flags).map(x=>String(x).trim()).filter(Boolean).slice(0,20)
@@ -192,14 +244,14 @@ FORMAT BẮT BUỘC cho caption, theo bài mẫu đẹp:
 5. 2-4 dòng checklist bắt đầu bằng "✔" về nguồn gốc/cách dùng/đối tượng khách nếu có nguồn. Không viết hàng sẵn, giao hàng, giá tốt, giá mềm, báo giá sỉ/lẻ theo thị trường, hỗ trợ cắt nếu KB/admin prompt không nói rõ.
 6. CTA cuối: "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn". Chỉ ghi số điện thoại nếu admin prompt hoặc KB có số.
 7. Hashtags: trả về 4-6 cụm từ khoá ngắn, KHÔNG dấu, KHÔNG ký tự # (ví dụ: "bap hoa bo", "thit bo nhap khau", "thuc pham dong lanh"). Hệ thống tự ghép thành hashtag chuẩn.
-8. Nếu có ảnh đã duyệt phù hợp, chọn media [{"type":"image","image_id":"..."}]. Không có thì media [] và thêm risk_flags "no_approved_image_available".
+8. Ảnh: danh sách "Ảnh liên quan" bên dưới ĐÃ ĐƯỢC LỌC theo chủ đề. Chọn TỐI THIỂU 3 ảnh (tối đa 6) nếu danh sách có từ 3 ảnh, xếp theo thứ tự muốn đăng, chỉ dùng image_id trong danh sách đó: media [{"type":"image","image_id":"..."}]. Chỉ khi danh sách dưới 3 ảnh mới lấy hết và thêm risk_flags "fewer_images_than_min".
 
 Cách viết cho ra bài đẹp:
 - Được dùng emoji chức năng giống mẫu: 🥩 🔥 ✅ 🍲 🍛 🍜 💯 ✔ 📞 ☎ 💬. Emoji phải đúng sản phẩm (gà thì 🐔/🍗, heo 🐷, bò 🥩, cá 🐟, hải sản 🦐/🐙) và giúp quét nội dung, không rải lung tung.
 - Dùng bullet/list ngắn, dễ nhìn trên Facebook. Mỗi dòng 1 ý.
 - Từ ngữ bán hàng được phép tự nhiên: giòn ngon, sần sật, thơm, béo, ngọt, tiện, đa dạng món nếu phù hợp với KB/sản phẩm. Không nói "tươi", "sạch", "cao cấp", "cam kết", "100%" nếu không có nguồn.
 - Dòng tiêu đề và hashtag phải làm rõ sản phẩm; không viết chung chung "thực phẩm chất lượng".
-- Nếu thiếu ảnh, vẫn viết đúng format nhưng risk_flags phải có no_approved_image_available.
+- Bài luôn cần ảnh: ít nhất 3 ảnh khi danh sách ảnh liên quan có đủ, và ảnh phải đúng sản phẩm đang nói (không lấy ảnh hàng khác cho đủ số).
 
 Cấm hẳn (bài sẽ bị chấm điểm thấp nếu vi phạm):
 - Từ sáo AI/quảng cáo: nâng tầm, giải pháp, đẳng cấp, hoàn hảo, tuyệt vời, hàng đầu, số 1, đỉnh/đỉnh cao, trọn vẹn, tận hưởng, chất lượng vượt trội.
@@ -214,7 +266,7 @@ Yêu cầu admin: ${prompt}
 Lịch gợi ý: ${scheduledAt || ''}${feedback ? `\n\nBẢN TRƯỚC CHƯA ĐẠT, phải viết lại:\n${feedback}` : ''}
 Bài Page đã đăng để học style (CHỈ học format/giọng văn/hashtag, KHÔNG lấy facts): ${JSON.stringify(recentPostStyle(stylePosts).slice(0,8))}
 Tài liệu đã duyệt: ${JSON.stringify(docs.map(d=>({id:d.id,title:d.title,content:String(d.content).slice(0,1000)})))}
-Ảnh đã duyệt: ${JSON.stringify(images.map(i=>({id:i.id,title:i.title,caption:i.caption,keywords:i.keywords})))}`;
+Ảnh liên quan (chỉ chọn trong danh sách này): ${JSON.stringify(images.map(i=>({id:i.id,title:i.title,caption:i.caption,keywords:i.keywords})))}`;
 }
 function dayStart(ms) { const d=new Date(ms); d.setHours(0,0,0,0); return d.getTime(); }
 function minutesInZone(ms, timezone) {
@@ -231,10 +283,12 @@ function isQuiet(ms,{timezone='Asia/Ho_Chi_Minh',quietHours='22:00-07:00'}={}) {
 export function createMarketing(config,store,complete,meta,{setIntervalFn=setInterval,clearIntervalFn=clearInterval,notifier=null}={}) {
   // Viết bài, chấm điểm, và nếu dưới ngưỡng thì viết lại (tối đa reviseAttempts
   // lần) với phản hồi nêu đúng lỗi cần sửa. Chỉ giữ bản điểm cao nhất.
-  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null}) {
-    const allDocs=approvedDocs(config.knowledgeFile), images=approvedImages(config.imageCatalogFile);
+  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[]}) {
+    const allDocs=approvedDocs(config.knowledgeFile), allImages=approvedImages(config.imageCatalogFile);
     const allowed=new Set(arr(sourceIds));
     const docs=allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs;
+    const shortlist=selectPostImages(config,{query:prompt,docs,exclude:excludeImageIds});
+    const images=shortlist.length ? shortlist : allImages;
     const minScore=Number(config.marketing?.minScore??0);
     const reviseAttempts=minScore>0?Math.max(0,Number(config.marketing?.reviseAttempts??0)):0;
     let best=null, bestSeo=null;
@@ -253,9 +307,20 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     }
     return {draft:best,seo:bestSeo,minScore};
   }
-  async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null}={}) {
+  async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null,excludeImageIds=[]}={}) {
     if(!config.marketing?.enabled) throw new Error('marketing disabled');
-    const {draft,seo,minScore}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds});
+    const minImages=Math.max(1,Number(config.marketing?.minImagesPerPost??3));
+    const maxImages=6;
+    const alreadyUsed=arr(store.listMarketingPosts({limit:10}))
+      .flatMap(p=>arr(JSON.parse(p.media||'[]')).map(m=>m?.image_id)).filter(Boolean).map(String);
+    const exclude=[...new Set([...arr(excludeImageIds).map(String), ...alreadyUsed])];
+    const {draft,seo,minScore}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude});
+    const selected=arr(sourceIds).length ? approvedDocs(config.knowledgeFile).filter(d=>sourceIds.includes(d.id)) : [];
+    const shortlist=selectPostImages(config,{query:prompt,caption:draft.caption,docs:selected,exclude});
+    const {media,enough}=ensureMinMedia(draft.media,shortlist,{min:minImages,max:maxImages});
+    draft.media=media;
+    draft.risk_flags=draft.risk_flags.filter(f=>f!=='no_approved_image_available' && f!=='fewer_images_than_min');
+    if(!enough) draft.risk_flags=[...new Set([...draft.risk_flags,'fewer_images_than_min'])];
     const below=minScore>0 && seo.score<minScore;
     const riskFlags=below?[...new Set([...draft.risk_flags,`low_seo_score_${seo.score}`])]:draft.risk_flags;
     const post=store.createMarketingPost({...draft,risk_flags:riskFlags,topic:prompt});
@@ -306,9 +371,10 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     try {
       const media=JSON.parse(reserved.media || '[]');
       const message=composePostMessage(reserved.caption, JSON.parse(reserved.hashtags || '[]'));
-      const image=resolveMarketingImage(config, media);
+      const images=resolveMarketingImages(config, media);
       let postId;
-      if(image) postId=await meta.publishPhotoPost({caption:message,imageUrl:image.url,filePath:image.filePath});
+      if(images.length>=2) postId=await meta.publishMultiPhotoPost({caption:message,images});
+      else if(images.length===1) postId=await meta.publishPhotoPost({caption:message,imageUrl:images[0].url,filePath:images[0].filePath});
       else postId=await meta.publishFeedPost({message,link:reserved.link});
       const read=await meta.readPost(postId);
       return store.markMarketingPublished(id,{facebookPostId:read.id,facebookPermalink:read.permalink_url,publishedAt:Date.now()});
