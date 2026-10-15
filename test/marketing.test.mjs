@@ -414,3 +414,35 @@ test('Meta multi-photo publisher uploads unpublished photos then attaches them t
   assert.equal(feed.published,undefined);
   await assert.rejects(()=>client.publishMultiPhotoPost({caption:'x',images:[{imageUrl:'https://example.test/one.jpg'}]}),/at least 2 images/);
 });
+
+test('ảnh mà tài liệu KB gán cho mặt hàng được xếp trước ảnh khớp từ khoá',t=>{
+  const {c}=fixture(t);
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images:[
+    {id:'ga-1',title:'Gà 1',keywords:['gà nguyên con'],file:'ga-1.jpg',caption:'Gà 1',approved:true},
+    {id:'gau-bo-1',title:'Gấu bò 1',keywords:['gấu bò'],file:'gau-bo-1.jpg',caption:'Gấu bò 1',approved:true},
+    {id:'gau-bo-2',title:'Gấu bò 2',keywords:['gấu bò'],file:'gau-bo-2.jpg',caption:'Gấu bò 2',approved:true}
+  ]}));
+  const docs=[{id:'product-gau-bo',title:'Gấu bò',keywords:['gấu bò'],content:'Tên sản phẩm: Gấu bò\nẢnh: gau-bo-2, gau-bo-1'}];
+  const list=selectPostImages(c,{query:'bài hôm nay viết về mặt hàng mới trong kho',docs,limit:3});
+  assert.equal(list[0].id,'gau-bo-2');
+  assert.equal(list[1].id,'gau-bo-1');
+  assert.ok(list.length>=2);
+});
+
+test('id ảnh ngoài danh sách bị loại kèm cờ, bài vẫn tạo được với ảnh đúng chủ đề',async t=>{
+  const {c,s}=fixture(t,'live');
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images:[
+    {id:'ga-1',title:'Gà 1',keywords:['gà nguyên con'],file:'ga-1.jpg',caption:'Gà 1',approved:true},
+    {id:'ga-2',title:'Gà 2',keywords:['gà nguyên con'],file:'ga-2.jpg',caption:'Gà 2',approved:true},
+    {id:'ga-3',title:'Gà 3',keywords:['gà nguyên con'],file:'ga-3.jpg',caption:'Gà 3',approved:true},
+    {id:'salmon-photo',title:'Ảnh cá hồi',keywords:['cá hồi'],file:'salmon.jpg',caption:'Ảnh cá hồi',approved:true}
+  ]}));
+  const complete=async()=>JSON.stringify({title_internal:'Gà nguyên con',caption:'🐔 GÀ NGUYÊN CON NHẬP KHẨU\n\n🔥 Gà nguyên con không đầu, thùng 15kg.\n\n✔ Bán buôn theo thùng\n\n💬 Inbox để được tư vấn',hashtags:['ga nguyen con'],cta:'Inbox',media:[{type:'image',image_id:'gau-bo-1'}],source_ids:['product-salmon'],risk_flags:[]});
+  const marketing=createMarketing(c,s,complete,{});
+  const post=await marketing.createDraft({prompt:'gà nguyên con'});
+  const media=JSON.parse(post.media), flags=JSON.parse(post.risk_flags);
+  assert.equal(media.some(m=>m.image_id==='gau-bo-1'),false);
+  assert.ok(flags.includes('image_id_not_in_shortlist'));
+  assert.ok(media.length>=3);
+  assert.ok(media.every(m=>m.image_id.startsWith('ga-')));
+});
