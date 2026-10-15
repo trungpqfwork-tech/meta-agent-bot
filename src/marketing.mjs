@@ -11,9 +11,14 @@ function approvedDocs(file) {
     return docs.filter(d=>d.approved===true && (!d.validUntil || Date.parse(d.validUntil)>now)).slice(0,50);
   } catch { return []; }
 }
-function approvedImages(file) {
-  try { return loadImageCatalog(file).filter(i=>i.approved===true).slice(0,50); }
-  catch { return []; }
+function approvedImages(file, limit=50) {
+  try {
+    const images=loadImageCatalog(file).filter(i=>i.approved===true);
+    // limit hữu hạn chỉ dùng để chặn prompt phình; nơi chỉ cần kiểm tra "có ảnh hay
+    // không" (bộ chọn chủ đề) phải thấy TOÀN BỘ kho, nếu không sản phẩm thêm sau sẽ
+    // vĩnh viễn không được chọn.
+    return Number.isFinite(limit) ? images.slice(0,limit) : images;
+  } catch { return []; }
 }
 function arr(value) { return Array.isArray(value) ? value : []; }
 // Ảnh của bài marketing phải được LỌC trước khi đưa cho model: kho đã hơn 200 bản
@@ -224,11 +229,14 @@ function recentPostStyle(posts) {
 function topicCandidates(docs, images, recentPosts=[]) {
   const recentText=normalize(arr(recentPosts).map(p=>p.message||p.first_line||'').join(' '));
   const imageText=normalize(arr(images).map(i=>[i.id,i.title,arr(i.keywords).join(' ')].join(' ')).join(' '));
-  return docs.filter(isProductishDoc).slice(0,40).map(d=>{
+  // Bộ chọn chủ đề phải thấy hết sản phẩm trong KB (nếu cắt bớt thì sản phẩm thêm
+  // sau không bao giờ được chọn); content rút ngắn vì bài viết lấy facts từ tài liệu
+  // đầy đủ ở bước sau, không lấy từ candidate.
+  return docs.filter(isProductishDoc).slice(0,80).map(d=>{
     const text=normalize(`${d.title} ${arr(d.keywords).join(' ')} ${d.content}`);
     const hasImage=arr(d.keywords).some(k=>imageText.includes(normalize(k))) || imageText.includes(normalize(d.title));
     const recentlyPosted=arr(d.keywords).some(k=>normalize(k).length>=4 && recentText.includes(normalize(k)));
-    return {id:d.id,title:d.title,keywords:arr(d.keywords).slice(0,12),hasImage,recentlyPosted,content:String(d.content).slice(0,800)};
+    return {id:d.id,title:d.title,keywords:arr(d.keywords).slice(0,12),hasImage,recentlyPosted,content:String(d.content).slice(0,300)};
   });
 }
 function autoTopicPrompt(config,{instruction='',stylePosts=[]}={},docs,images,recentPosts=[]) {
@@ -353,7 +361,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
   }
   async function createAutoDraft({instruction='',tone='',scheduledAt=0,approvedBy='admin'}={}) {
     if(!config.marketing?.enabled) throw new Error('marketing disabled');
-    const docs=approvedDocs(config.knowledgeFile), images=approvedImages(config.imageCatalogFile);
+    const docs=approvedDocs(config.knowledgeFile), images=approvedImages(config.imageCatalogFile, Infinity);
     const recentLocal=store.listMarketingPosts({limit:20}).map(p=>({id:p.id,created_time:new Date(p.created||Date.now()).toISOString(),message:p.caption,attachments:[]}));
     let stylePosts=[];
     try { stylePosts=meta.listPublishedPosts ? await meta.listPublishedPosts({limit:12}) : []; } catch { stylePosts=[]; }
