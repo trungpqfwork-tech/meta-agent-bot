@@ -27,8 +27,21 @@ export function selectPostImages(config, {query='', caption='', docs=[], exclude
   catch { return []; }
   if(!catalog.length) return [];
   const trim = img => ({id:img.id, title:img.title, keywords:arr(img.keywords), caption:img.caption});
+  const byId=new Map(catalog.map(img=>[img.id, img]));
   const ranked=[];
   const push = list => { for(const img of list) if(img?.id && !ranked.some(x=>x.id===img.id)) ranked.push(img); };
+  // Tài liệu KB ghi rõ ảnh của mặt hàng ("Ảnh: ga-nguyen-con-1, ..."). Đó là ảnh
+  // người vận hành đã gán cho đúng mặt hàng nên xếp trước ảnh khớp từ khoá: model
+  // hay copy id từ dòng "Ảnh:" trong tài liệu, mà danh sách gửi model lại bị cắt
+  // theo điểm khớp nên id đúng có thể không có trong danh sách đó (ca thật
+  // 15/10/2026: draft gấu bò bị chặn vì id gau-bo-1 nằm ngoài danh sách gửi model).
+  const docImageIds=[];
+  for(const d of arr(docs)) {
+    const line=/Ảnh:\s*([^\n]+)/i.exec(String(d?.content ?? ''));
+    if(!line) continue;
+    for(const raw of line[1].split(/[,;]/)) { const id=raw.trim(); if(id) docImageIds.push(id); }
+  }
+  push(docImageIds.map(id=>byId.get(id)).filter(Boolean));
   push(imageScores(catalog, String(query ?? '').slice(0,1200)));
   if(ranked.length < limit) {
     const terms=[caption, ...arr(docs).flatMap(d=>[d.title, ...arr(d.keywords)])].filter(Boolean).join(' ');
@@ -179,7 +192,15 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
   const sourceIds=new Set(docs.map(d=>d.id));
   for(const id of draft.source_ids) if(!sourceIds.has(id)) throw new Error(`Unknown marketing source: ${id}`);
   const imageIds=new Set(images.map(i=>i.id));
-  for(const m of draft.media) if(m?.type==='image' && m.image_id && !imageIds.has(m.image_id)) throw new Error(`Unknown marketing image: ${m.image_id}`);
+  // Ảnh ngoài danh sách gửi model thì bỏ và ghi cờ, không ném lỗi: model hay copy
+  // id ảnh từ dòng "Ảnh:" của tài liệu trong prompt, và trước đây chỉ vì một id
+  // như vậy mà cả bài không tạo được (ca thật 15/10/2026, draft gấu bò).
+  // Ảnh hàng khác vẫn không được đăng: id lạ bị loại, ensureMinMedia bù ảnh đúng chủ đề.
+  const strayImages=draft.media.filter(m=>m?.type==='image' && m.image_id && !imageIds.has(m.image_id)).map(m=>String(m.image_id));
+  if(strayImages.length) {
+    draft.media=draft.media.filter(m=>!(m?.type==='image' && m.image_id && !imageIds.has(m.image_id)));
+    draft.risk_flags=[...new Set([...draft.risk_flags,'image_id_not_in_shortlist'])].slice(0,20);
+  }
   return draft;
 }
 function isProductishDoc(d) {
