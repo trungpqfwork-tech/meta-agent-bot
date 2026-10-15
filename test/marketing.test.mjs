@@ -468,3 +468,23 @@ test('bộ chọn chủ đề thấy mọi sản phẩm KB, kể cả sản ph�
   assert.match(calls[0],/"id":"product-p45"[^}]*"hasImage":true/);
   assert.match(post.topic,/Sản phẩm 45/);
 });
+
+test('trần tài liệu 80: sản phẩm thứ 60 vẫn vào được prompt chọn chủ đề và prompt viết bài',async t=>{
+  const {c,s}=fixture(t,'live');
+  const docs=[];
+  for(let i=1;i<=60;i++) docs.push({id:`product-p${String(i).padStart(2,'0')}`,title:`Sản phẩm ${i}`,keywords:[`sp${i}`],content:`Tên sản phẩm: Sản phẩm ${i}\nNhóm: test\nẢnh: anh-sp${i}-1`,approved:true,validUntil:null});
+  docs.push({id:'category-test',title:'Nhóm test',keywords:['test'],content:'Nhóm test.',approved:true,validUntil:null});
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:docs}));
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images:[{id:'anh-sp60-1',title:'Ảnh sản phẩm 60',keywords:['sp60'],file:'anh-sp60-1.jpg',caption:'',approved:true}]}));
+  const calls=[];
+  const complete=async ({message})=>{
+    calls.push(message);
+    if(calls.length===1) return JSON.stringify({topic:'Sản phẩm 60',prompt:'Viết bài sản phẩm 60',source_ids:['product-p60'],reason:'có ảnh'});
+    return JSON.stringify({title_internal:'Sản phẩm 60',caption:'🔥 Sản phẩm 60 phù hợp nhà hàng, quán ăn, bếp ăn.\n\n💬 Inbox để được tư vấn.',hashtags:['tmfood'],cta:'Inbox để được tư vấn',media:[],source_ids:['product-p60'],risk_flags:[]});
+  };
+  const post=await createMarketing(c,s,complete,{listPublishedPosts:async()=>[]}).createAutoDraft({instruction:'test'});
+  assert.match(calls[0],/"id":"product-p60"/);
+  assert.match(calls[1],/"id":"product-p60"/);
+  assert.ok(calls[1].length<40000, 'prompt viết bài phải nằm trong ngân sách ký tự');
+  assert.match(post.topic,/Sản phẩm 60/);
+});

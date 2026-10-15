@@ -8,7 +8,7 @@ function approvedDocs(file) {
   try {
     const docs=JSON.parse(readFileSync(file,'utf8')).documents ?? [];
     const now=Date.now();
-    return docs.filter(d=>d.approved===true && (!d.validUntil || Date.parse(d.validUntil)>now)).slice(0,50);
+    return docs.filter(d=>d.approved===true && (!d.validUntil || Date.parse(d.validUntil)>now)).slice(0,80);
   } catch { return []; }
 }
 function approvedImages(file, limit=50) {
@@ -21,6 +21,19 @@ function approvedImages(file, limit=50) {
   } catch { return []; }
 }
 function arr(value) { return Array.isArray(value) ? value : []; }
+// Prompt gửi model có ngân sách ký tự: cắt theo số tài liệu cứng sẽ âm thầm bỏ sản
+// phẩm, còn dán hết thì model trả JSON rỗng. Giữ tài liệu theo thứ tự và dừng khi
+// chạm ngân sách.
+function docPayload(docs, {budget=24000, perDoc=1000}={}) {
+  const out=[]; let used=0;
+  for(const d of arr(docs)) {
+    const item={id:d.id,title:d.title,content:String(d.content).slice(0,perDoc)};
+    const size=JSON.stringify(item).length;
+    if(out.length && used+size>budget) break;
+    out.push(item); used+=size;
+  }
+  return out;
+}
 // Ảnh của bài marketing phải được LỌC trước khi đưa cho model: kho đã hơn 200 bản
 // ghi, dán cả kho vào prompt thì model trả media rỗng và bài lên Page không có
 // ảnh (ca thật 15/10/2026). Dùng đúng bộ khớp từ khoá của CSKH (imageScores:
@@ -294,7 +307,7 @@ Tone: ${tone || config.marketing?.defaultTone || 'bán hàng Facebook rõ ý, g�
 Yêu cầu admin: ${prompt}
 Lịch gợi ý: ${scheduledAt || ''}${feedback ? `\n\nBẢN TRƯỚC CHƯA ĐẠT, phải viết lại:\n${feedback}` : ''}
 Bài Page đã đăng để học style (CHỈ học format/giọng văn/hashtag, KHÔNG lấy facts): ${JSON.stringify(recentPostStyle(stylePosts).slice(0,8))}
-Tài liệu đã duyệt: ${JSON.stringify(docs.map(d=>({id:d.id,title:d.title,content:String(d.content).slice(0,1000)})))}
+Tài liệu đã duyệt: ${JSON.stringify(docPayload(docs))}
 Ảnh liên quan (chỉ chọn trong danh sách này): ${JSON.stringify(images.map(i=>({id:i.id,title:i.title,caption:i.caption,keywords:i.keywords})))}`;
 }
 function dayStart(ms) { const d=new Date(ms); d.setHours(0,0,0,0); return d.getTime(); }
