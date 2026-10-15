@@ -420,6 +420,13 @@ export class Store {
     this.marketingAudit(id,'cancelled',reason);
     return this.marketingPost(id);
   }
+  markMarketingDeleted(id,reason='') {
+    const p=this.marketingPost(id);
+    assert(p && p.status==='published','Only a published post can be deleted');
+    this.db.prepare("UPDATE fb_posts SET status='deleted',error=?,updated=? WHERE id=?").run(String(reason).slice(0,1000),Date.now(),id);
+    this.marketingAudit(id,'deleted',reason);
+    return this.marketingPost(id);
+  }
   reconcileMarketingPost(id,{outcome,facebookPostId='',facebookPermalink=''}={}) {
     if(outcome==='published') return this.markMarketingPublished(id,{facebookPostId,facebookPermalink});
     if(outcome==='failed') return this.markMarketingFailed(id,'operator_reconcile_not_published');
