@@ -118,6 +118,37 @@ export function metaClient(config,secrets,fetcher=fetch) {
       if(typeof j.id!=='string' && typeof j.post_id!=='string') throw new Error('Unexpected Meta photo receipt');
       return j.post_id || j.id;
     },
+    // Bài nhiều ảnh: Facebook chỉ nhận album bằng cách upload từng ảnh ở chế độ
+    // unpublished rồi gắn vào một post của Page. Đăng 3 ảnh = 3 lần upload + 1
+    // lần feed; ảnh unpublished không lộ ra ngoài khi một bước giữa bị lỗi.
+    async publishMultiPhotoPost({caption='',images=[],scheduledAt=0}={}) {
+      const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
+      const list=Array.isArray(images)?images:[];
+      if(list.length<2) throw new Error('Meta multi-photo publish needs at least 2 images');
+      const ids=[];
+      for(const img of list) {
+        const form=new FormData();
+        form.append('published','false');
+        if(img?.imageUrl) form.append('url',String(img.imageUrl));
+        else if(img?.filePath) form.append('source',new Blob([readFileSync(img.filePath)]),basename(img.filePath));
+        else throw new Error('Meta photo source required');
+        const r=await fetcher(`${base}/${config.pageId}/photos`,{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form,signal:AbortSignal.timeout(30000)});
+        if(!r.ok) throw await metaError(r, 'Meta photo upload failed');
+        const j=await r.json();
+        if(typeof j.id!=='string') throw new Error('Unexpected Meta photo receipt');
+        ids.push(j.id);
+      }
+      const body={message:String(caption??''),attached_media:ids.map(id=>({media_fbid:id}))};
+      if(!body.message.trim()) throw new Error('Meta post message required');
+      if(scheduledAt) { body.published=false; body.scheduled_publish_time=Math.floor(scheduledAt/1000); }
+      const r=await fetcher(`${base}/${config.pageId}/feed`,{
+        method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(20000),body:JSON.stringify(body)
+      });
+      if(!r.ok) throw await metaError(r, 'Meta multi-photo publish failed');
+      const j=await r.json();
+      if(typeof j.id!=='string') throw new Error('Unexpected Meta post receipt');
+      return j.id;
+    },
     async readPost(postId) {
       const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
       const r=await fetcher(`${base}/${encodeURIComponent(postId)}?fields=id,permalink_url,created_time,message`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(10000)});

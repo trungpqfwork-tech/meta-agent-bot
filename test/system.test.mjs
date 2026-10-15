@@ -392,7 +392,8 @@ test('runtime config can be generated from private env',t=>{
     PAGE_CSKH_MARKETING_QUIET_HOURS:'22:00-07:00',
     PAGE_CSKH_MARKETING_MIN_SCORE:'7',
     PAGE_CSKH_MARKETING_REVISE_ATTEMPTS:'2',
-    PAGE_CSKH_MARKETING_LOW_SCORE_ACTION:'hold'
+    PAGE_CSKH_MARKETING_LOW_SCORE_ACTION:'hold',
+    PAGE_CSKH_MARKETING_MIN_IMAGES:'4'
   });
   const file=join(dir,'generated.json');writeFileSync(file,JSON.stringify(c));
   const loaded=loadConfig(file);
@@ -405,7 +406,7 @@ test('runtime config can be generated from private env',t=>{
   assert.equal(loaded.messageDebounceSeconds,4);
   assert.equal(loaded.enableHumanHandoff,false);
   assert.deepEqual(loaded.scopeKeywords,['a','b','c']);
-  assert.deepEqual(loaded.marketing,{enabled:true,approvalRequired:true,maxPostsPerDay:7,defaultTone:'ấm áp',timezone:'Asia/Ho_Chi_Minh',quietHours:'22:00-07:00',minScore:7,reviseAttempts:2,lowScoreAction:'hold'});
+  assert.deepEqual(loaded.marketing,{enabled:true,approvalRequired:true,maxPostsPerDay:7,defaultTone:'ấm áp',timezone:'Asia/Ho_Chi_Minh',quietHours:'22:00-07:00',minScore:7,reviseAttempts:2,lowScoreAction:'hold',minImagesPerPost:4});
 });
 test('config forbids secrets inside agent workspace',t=>{
   const {c,dir}=fixture(t);const file=join(dir,'config.json');c.envFile=join(c.workspace,'.env');writeFileSync(file,JSON.stringify(c));assert.throws(()=>loadConfig(file),/outside agent workspace/);

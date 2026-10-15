@@ -35,6 +35,7 @@ export function loadConfig(file) {
   c.marketing.minScore ??= 0;
   c.marketing.reviseAttempts ??= 1;
   c.marketing.lowScoreAction ??= 'warn';
+  c.marketing.minImagesPerPost ??= 3;
   assert(typeof c.marketing.enabled === 'boolean', 'Invalid marketing.enabled');
   assert(c.marketing.approvalRequired === true, 'marketing approval is required');
   assert(Number.isInteger(c.marketing.maxPostsPerDay) && c.marketing.maxPostsPerDay > 0 && c.marketing.maxPostsPerDay <= 50, 'Invalid marketing.maxPostsPerDay');
@@ -44,6 +45,7 @@ export function loadConfig(file) {
   assert(Number.isInteger(c.marketing.minScore) && c.marketing.minScore >= 0 && c.marketing.minScore <= 10, 'Invalid marketing.minScore (0-10, 0 = no gate)');
   assert(Number.isInteger(c.marketing.reviseAttempts) && c.marketing.reviseAttempts >= 0 && c.marketing.reviseAttempts <= 3, 'Invalid marketing.reviseAttempts (0-3)');
   assert(['warn','hold'].includes(c.marketing.lowScoreAction), 'Invalid marketing.lowScoreAction (warn|hold)');
+  assert(Number.isInteger(c.marketing.minImagesPerPost) && c.marketing.minImagesPerPost >= 1 && c.marketing.minImagesPerPost <= 6, 'Invalid marketing.minImagesPerPost (1-6 images per post)');
   assert(c.marketing.minScore === 0 || c.marketing.minScore <= 6 || c.marketing.reviseAttempts > 0 || c.marketing.lowScoreAction === 'hold', 'minScore above 6 without a revision pass sends weak posts anyway; set reviseAttempts>0 or lowScoreAction=hold');
   assert(/^\/webhooks\/[a-z0-9/-]+$/.test(c.webhookPath), 'Invalid webhookPath');
   const u = new URL(c.publicWebhookUrl);
@@ -128,7 +130,8 @@ function marketingConfigFromEnv(env) {
     quietHours: envText(env, 'PAGE_CSKH_MARKETING_QUIET_HOURS', '22:00-07:00'),
     minScore: envInt(env, 'PAGE_CSKH_MARKETING_MIN_SCORE', 0),
     reviseAttempts: envInt(env, 'PAGE_CSKH_MARKETING_REVISE_ATTEMPTS', 1),
-    lowScoreAction: envText(env, 'PAGE_CSKH_MARKETING_LOW_SCORE_ACTION', 'warn')
+    lowScoreAction: envText(env, 'PAGE_CSKH_MARKETING_LOW_SCORE_ACTION', 'warn'),
+    minImagesPerPost: envInt(env, 'PAGE_CSKH_MARKETING_MIN_IMAGES', 3)
   };
 }
 
@@ -214,14 +217,15 @@ export function applyEnvOverrides(config, env) {
   if (env.PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS) {
     c.adminTelegramAllowedUsers = envCsvOptional(env, 'PAGE_CSKH_ADMIN_TELEGRAM_ALLOWED_USERS');
   }
-  if (env.PAGE_CSKH_ENABLE_MARKETING_POSTS || env.PAGE_CSKH_MARKETING_APPROVAL_REQUIRED || env.PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY || env.PAGE_CSKH_MARKETING_DEFAULT_TONE || env.PAGE_CSKH_MARKETING_TIMEZONE || env.PAGE_CSKH_MARKETING_QUIET_HOURS) {
+  if (env.PAGE_CSKH_ENABLE_MARKETING_POSTS || env.PAGE_CSKH_MARKETING_APPROVAL_REQUIRED || env.PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY || env.PAGE_CSKH_MARKETING_DEFAULT_TONE || env.PAGE_CSKH_MARKETING_TIMEZONE || env.PAGE_CSKH_MARKETING_QUIET_HOURS || env.PAGE_CSKH_MARKETING_MIN_IMAGES) {
     c.marketing = {...(c.marketing ?? {}), ...marketingConfigFromEnv({...{
       PAGE_CSKH_ENABLE_MARKETING_POSTS: String(c.marketing?.enabled ?? false),
       PAGE_CSKH_MARKETING_APPROVAL_REQUIRED: String(c.marketing?.approvalRequired ?? true),
       PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY: String(c.marketing?.maxPostsPerDay ?? 3),
       PAGE_CSKH_MARKETING_DEFAULT_TONE: c.marketing?.defaultTone ?? 'thân thiện, chuyên nghiệp, ngắn gọn',
       PAGE_CSKH_MARKETING_TIMEZONE: c.marketing?.timezone ?? 'Asia/Ho_Chi_Minh',
-      PAGE_CSKH_MARKETING_QUIET_HOURS: c.marketing?.quietHours ?? '22:00-07:00'
+      PAGE_CSKH_MARKETING_QUIET_HOURS: c.marketing?.quietHours ?? '22:00-07:00',
+      PAGE_CSKH_MARKETING_MIN_IMAGES: String(c.marketing?.minImagesPerPost ?? 3)
     }, ...env})};
     assert(c.marketing.approvalRequired === true, 'marketing approval is required');
   }

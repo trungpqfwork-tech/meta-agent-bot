@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Store } from '../src/store.mjs';
 import { metaClient } from '../src/meta.mjs';
 import { startAdmin } from '../src/admin.mjs';
-import { createMarketing, scoreMarketingSeo, buildHashtags } from '../src/marketing.mjs';
+import { createMarketing, scoreMarketingSeo, buildHashtags, selectPostImages, ensureMinMedia } from '../src/marketing.mjs';
 
 function fixture(t,mode='live') {
   const dir=mkdtempSync(join(tmpdir(),'page-cskh-marketing-'));
@@ -322,4 +322,95 @@ test('missing CTA or fewer than 3 hashtags keeps a post under a 6-point gate',as
   const fewTags=scoreMarketingSeo({...base,hashtags:['#TMFood'],caption:'Cá hồi Na Uy cắt khúc cho bữa tối gia đình ở Thái Bình. Inbox em tư vấn nhé.'});
   assert.equal(fewTags.score,6);
   assert.match(fewTags.notes.join(';'),/Hashtag/);
+});
+
+const gaCatalog={schemaVersion:1,images:[
+  {id:'ga-1',title:'Gà nguyên con 1',keywords:['gà nguyên con'],file:'ga-1.jpg',caption:'Gà nguyên con túi vàng',approved:true},
+  {id:'ga-2',title:'Gà nguyên con 2',keywords:['gà nguyên con'],file:'ga-2.jpg',caption:'Gà nguyên con góc khác',approved:true},
+  {id:'ga-3',title:'Gà nguyên con 3',keywords:['gà nguyên con'],file:'ga-3.jpg',caption:'Gà nguyên con túi xanh',approved:true},
+  {id:'ga-4',title:'Gà nguyên con 4',keywords:['gà nguyên con'],file:'ga-4.jpg',caption:'Gà nguyên con thùng Shinwoo',approved:true},
+  {id:'ga-goc-1',title:'Gà nguyên con quay',keywords:['gà nguyên con quay'],file:'ga-goc-1.jpg',caption:'Gà nguyên con quay chín',approved:false},
+  {id:'salmon-photo',title:'Ảnh cá hồi',keywords:['cá hồi'],file:'salmon.jpg',caption:'Ảnh cá hồi',approved:true}
+]};
+
+test('selectPostImages keeps only images matching the topic and ensureMinMedia tops media up to the minimum',t=>{
+  const {c}=fixture(t);
+  writeFileSync(c.imageCatalogFile,JSON.stringify(gaCatalog));
+  const shortlist=selectPostImages(c,{query:'gà nguyên con'});
+  assert.ok(shortlist.length>=3);
+  assert.deepEqual(shortlist.map(i=>i.id).slice(0,3),['ga-1','ga-2','ga-3']);
+  assert.equal(shortlist.some(i=>i.id==='salmon-photo'),false);
+  assert.equal(shortlist.some(i=>i.id==='ga-goc-1'),false,'ảnh chưa duyệt không được vào danh sách');
+  const filled=ensureMinMedia([],shortlist,{min:3,max:6});
+  assert.equal(filled.enough,true);
+  assert.deepEqual(filled.media.map(m=>m.image_id),['ga-1','ga-2','ga-3']);
+  const kept=ensureMinMedia([{type:'image',image_id:'ga-4'}],shortlist,{min:2,max:6});
+  assert.deepEqual(kept.media.map(m=>m.image_id),['ga-4','ga-1']);
+  const capped=ensureMinMedia([],shortlist,{min:5,max:6});
+  assert.equal(capped.media.length,4,'chỉ có 4 ảnh gà đã duyệt trong kho nên không thể đủ 5');
+});
+
+test('a marketing post keeps at least three topic images and publishes them as one album',async t=>{
+  const {c,s}=fixture(t,'live');
+  writeFileSync(c.imageCatalogFile,JSON.stringify(gaCatalog));
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[{id:'product-ga',title:'Gà nguyên con',keywords:['gà nguyên con'],content:'Gà nguyên con không đầu nhập khẩu Hàn Quốc, thùng 15kg, bán buôn theo thùng.',approved:true,validUntil:null}]}));
+  const complete=async()=>JSON.stringify({title_internal:'Gà nguyên con',caption:'🐔 GÀ NGUYÊN CON KHÔNG ĐẦU - NHẬP KHẨU HÀN QUỐC\n\n🔥 Gà nguyên con không đầu, quy cách thùng 15kg.\n\n✔ Bán buôn theo thùng\n\n💬 Inbox để được tư vấn',hashtags:['ga nguyen con'],cta:'Inbox',media:[],source_ids:['product-ga'],risk_flags:['no_approved_image_available']});
+  let album=null,single=0,feed=0;
+  const marketing=createMarketing(c,s,complete,{
+    publishMultiPhotoPost:async args=>{album=args;return '100_album';},
+    publishPhotoPost:async()=>{single++;return '100_photo';},
+    publishFeedPost:async()=>{feed++;return '100_feed';},
+    readPost:async()=>({id:'100_album',permalink_url:'https://facebook.com/100_album'})
+  });
+  const post=await marketing.createDraft({prompt:'gà nguyên con'});
+  const media=JSON.parse(post.media), flags=JSON.parse(post.risk_flags);
+  assert.equal(media.length,3,'bài phải có ít nhất 3 ảnh dù model trả media rỗng');
+  assert.ok(media.every(m=>String(m.image_id).startsWith('ga-')),'ảnh phải đúng chủ đề');
+  assert.equal(flags.includes('no_approved_image_available'),false);
+  assert.equal(flags.includes('fewer_images_than_min'),false);
+  s.approveMarketingPost(post.id,'owner');
+  const result=await marketing.publishNow(post.id);
+  assert.equal(single,0);
+  assert.equal(feed,0);
+  assert.equal(album.images.length,3);
+  assert.match(album.caption,/#TestPage/,'album phải giữ hashtag của Page');
+  assert.equal(album.images[0].url,'https://example.test/images/ga-1.jpg');
+  assert.equal(result.facebook_post_id,'100_album');
+});
+
+test('a marketed post flags fewer_images_than_min when the topic has too few approved photos',async t=>{
+  const {c,s}=fixture(t,'live');
+  writeFileSync(c.imageCatalogFile,JSON.stringify({schemaVersion:1,images:[{id:'ga-1',title:'Gà',keywords:['gà nguyên con'],file:'ga-1.jpg',caption:'Gà',approved:true}]}));
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[{id:'product-ga',title:'Gà nguyên con',keywords:['gà nguyên con'],content:'Gà nguyên con thùng 15kg.',approved:true,validUntil:null}]}));
+  const complete=async()=>JSON.stringify({title_internal:'Gà',caption:'🐔 GÀ NGUYÊN CON\n\n🔥 Gà nguyên con thùng 15kg.\n\n💬 Inbox để được tư vấn',hashtags:['ga nguyen con'],cta:'Inbox',media:[],source_ids:['product-ga'],risk_flags:[]});
+  const marketing=createMarketing(c,s,complete,{});
+  const post=await marketing.createDraft({prompt:'gà nguyên con'});
+  assert.equal(JSON.parse(post.media).length,1);
+  assert.equal(JSON.parse(post.risk_flags).includes('fewer_images_than_min'),true);
+});
+
+test('Meta multi-photo publisher uploads unpublished photos then attaches them to one album post',async()=>{
+  const calls=[];
+  const client=metaClient({graphVersion:'v25.0',pageId:'100',appId:'200'},{META_PAGE_ACCESS_TOKEN:'messenger-token',META_PAGE_PUBLISH_ACCESS_TOKEN:'publish-token',META_APP_SECRET:'app-secret'},async(url,opts={})=>{
+    calls.push({url:String(url),opts});
+    assert.equal(opts.headers?.Authorization,'Bearer publish-token');
+    if(String(url).endsWith('/100/photos')) {
+      assert.equal(opts.body.get('published'),'false');
+      return {ok:true,json:async()=>({id:`photo_${calls.length}`})};
+    }
+    if(String(url).endsWith('/100/feed')) return {ok:true,json:async()=>({id:'100_album'})};
+    throw new Error('unexpected '+url);
+  });
+  const id=await client.publishMultiPhotoPost({caption:'Gà nguyên con',images:[
+    {imageUrl:'https://example.test/images/ga-1.jpg'},
+    {imageUrl:'https://example.test/images/ga-2.jpg'},
+    {imageUrl:'https://example.test/images/ga-3.jpg'}
+  ]});
+  assert.equal(id,'100_album');
+  assert.equal(calls.length,4);
+  const feed=JSON.parse(calls[3].opts.body);
+  assert.equal(feed.message,'Gà nguyên con');
+  assert.deepEqual(feed.attached_media,[{media_fbid:'photo_1'},{media_fbid:'photo_2'},{media_fbid:'photo_3'}]);
+  assert.equal(feed.published,undefined);
+  await assert.rejects(()=>client.publishMultiPhotoPost({caption:'x',images:[{imageUrl:'https://example.test/one.jpg'}]}),/at least 2 images/);
 });

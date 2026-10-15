@@ -72,6 +72,7 @@ PAGE_CSKH_MARKETING_MAX_POSTS_PER_DAY=3
 PAGE_CSKH_MARKETING_DEFAULT_TONE=thân thiện, chuyên nghiệp, ngắn gọn
 PAGE_CSKH_MARKETING_TIMEZONE=Asia/Ho_Chi_Minh
 PAGE_CSKH_MARKETING_QUIET_HOURS=22:00-07:00
+PAGE_CSKH_MARKETING_MIN_IMAGES=3
 ```
 
 Generated config shape:
@@ -84,7 +85,8 @@ Generated config shape:
     "maxPostsPerDay": 3,
     "defaultTone": "thân thiện, chuyên nghiệp, ngắn gọn",
     "timezone": "Asia/Ho_Chi_Minh",
-    "quietHours": "22:00-07:00"
+    "quietHours": "22:00-07:00",
+    "minImagesPerPost": 3
   }
 }
 ```
@@ -96,6 +98,8 @@ Rules:
 - `maxPostsPerDay` must be a positive integer.
 - `timezone` defaults to `Asia/Ho_Chi_Minh`.
 - `quietHours` blocks scheduled auto-publish in that local interval unless an admin command explicitly says to publish during that interval.
+- `minImagesPerPost` (1-6, default 3) is the minimum số ảnh mỗi bài. Bài gửi
+  Page là album nhiều ảnh, không phải bài một ảnh.
 
 ## Admin flow
 
@@ -353,7 +357,11 @@ Required methods:
 
 - `probePostPermissions()`
 - `publishFeedPost({message, link, scheduledAt})`
-- `publishPhotoPost({caption, imageUrl, filePath, scheduledAt})`
+- `publishPhotoPost({caption, imageUrl, filePath, scheduledAt})` — one image only
+- `publishMultiPhotoPost({caption, images, scheduledAt})` — album từ 2 ảnh trở
+  lên: upload từng ảnh với `published=false` rồi `POST /{page-id}/feed` kèm
+  `attached_media:[{media_fbid:<photo-id>}, ...]`. Ảnh unpublished nên nếu bước
+  feed lỗi thì không có ảnh nào lộ ra ngoài.
 - `readPost(postId)`
 
 What the publisher sends is composed at publish time, not stored as-is:
@@ -362,12 +370,24 @@ What the publisher sends is composed at publish time, not stored as-is:
   caption (`\n\n#tag1 #tag2`), de-duplicates them and drops any tag already
   present in the caption. Without this the hashtags stayed in the `fb_posts`
   column and every published post went out without a single hashtag.
-- `resolveMarketingImage(config, media)` turns a draft's
+- Ảnh của bài được LỌC TRƯỚC khi đưa cho model: `selectPostImages()` chạy
+  `imageScores()` (cùng bộ khớp từ khoá/IDF mà CSKH dùng) trên chủ đề + caption
+  + keyword của tài liệu để ra danh sách ngắn (mặc định 12 ảnh), ảnh vừa dùng ở
+  10 bài gần nhất bị đẩy xuống cuối. Prompt chỉ thấy danh sách ngắn này.
+  Lý do: kho ảnh đã hơn 200 bản ghi; dán cả kho vào prompt thì model trả
+  `media:[]` và bài lên Page không có ảnh (ca thật 15/10/2026).
+- `ensureMinMedia(media, shortlist, {min, max})` giữ thứ tự model chọn rồi điền
+  thêm ảnh theo điểm khớp cho đủ `minImagesPerPost` (tối đa 6). Không đủ ảnh
+  cùng chủ đề thì gắn `risk_flags:["fewer_images_than_min"]` để admin bổ sung
+  ảnh, không lấy ảnh hàng khác cho đủ số.
+- `resolveMarketingImages(config, media)` turns a draft's
   `{type:'image', image_id}` into a real source: the catalog entry's own `url`,
   otherwise the public `https://<publicWebhookUrl origin>/images/<file>` URL that
   edge serves for approved files, otherwise the local `runtime/images/<file>`
   path. An `image_id` that is missing or not `approved:true` yields `null`, and
-  the post falls back to a text post instead of failing the publish.
+  the post falls back to a text post instead of failing the publish. Với nhiều
+  ảnh, ảnh nào resolve được thì đăng; từ 2 ảnh trở lên dùng
+  `publishMultiPhotoPost`, còn lại mới rơi về bài text.
 
 Feed post endpoint:
 
