@@ -215,6 +215,11 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     risk_flags:arr(raw.risk_flags).map(x=>String(x).trim()).filter(Boolean).slice(0,20)
   };
   if(!draft.caption) throw new Error('Marketing caption required');
+  const priceStripped=stripPriceLines(draft.caption);
+  if(priceStripped.removed.length) {
+    if(priceStripped.caption) draft.caption=priceStripped.caption;
+    draft.risk_flags=[...new Set([...draft.risk_flags,'price_line_removed'])].slice(0,20);
+  }
   const sourceIds=new Set(docs.map(d=>d.id));
   for(const id of draft.source_ids) if(!sourceIds.has(id)) throw new Error(`Unknown marketing source: ${id}`);
   const imageIds=new Set(images.map(i=>i.id));
@@ -228,6 +233,19 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     draft.risk_flags=[...new Set([...draft.risk_flags,'image_id_not_in_shortlist'])].slice(0,20);
   }
   return draft;
+}
+// Chủ Page chốt 15/10/2026: bài đăng KHÔNG để giá, giá chỉ tư vấn khi khách inbox.
+// Model vẫn có thể chép giá từ tài liệu KB, nên cắt hẳn dòng có giá trước khi lưu và
+// ghi cờ price_line_removed để người duyệt biết bài đã bị lược.
+const PRICE_LINE=/(\d[\d.,]*\s*(đ|₫|vnd|vnđ|đồng)\b)|(\bgiá\s*(lẻ|buôn|sỉ|bán)\b)|(\bgiá\s*[:=])/i;
+export function stripPriceLines(caption) {
+  const lines=String(caption??'').split('\n');
+  const kept=[], removed=[];
+  for(const line of lines) (PRICE_LINE.test(line) ? removed : kept).push(line);
+  return {
+    caption: kept.join('\n').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+$/gm,'').trim(),
+    removed: removed.map(l=>l.trim()).filter(Boolean)
+  };
 }
 function isProductishDoc(d) {
   return /^product-|^category-|^usage-|^brand-/.test(String(d.id??''));
@@ -307,7 +325,8 @@ Cấm hẳn (bài sẽ bị chấm điểm thấp nếu vi phạm):
 - Từ sáo AI/quảng cáo: nâng tầm, giải pháp, đẳng cấp, hoàn hảo, tuyệt vời, hàng đầu, số 1, đỉnh/đỉnh cao, trọn vẹn, tận hưởng, chất lượng vượt trội.
 - Dấu gạch dài "—" (không dùng; dấu "–" trong dòng tiêu đề thì được vì Page đang dùng), dấu chấm than chồng, mở bài "ngày nay/bạn đang tìm kiếm", kết "tóm lại/kết luận".
 - Mẫu "không chỉ ... mà còn", "từ A đến B", CTA thúc ép "nhanh tay/đừng bỏ lỡ/hãy liên hệ ngay hôm nay".
-- Bịa giá, tồn kho, khuyến mãi, số điện thoại, chứng nhận, giao hàng, hàng sẵn, báo giá sỉ/lẻ, hỗ trợ cắt, bảo hành/cam kết nếu dữ liệu không nói rõ.
+- KHÔNG đưa BẤT KỲ giá nào vào bài đăng: không số tiền (đ/kg, đ/thùng, VND), không "giá buôn/giá lẻ/giá sỉ", không mốc số lượng kèm giá, kể cả khi tài liệu có ghi giá. Giá chỉ tư vấn khi khách inbox. Tài liệu có giá thì thay bằng đặc điểm, quy cách, đối tượng khách dùng.
+- Bịa tồn kho, khuyến mãi, số điện thoại ngoài hotline trong tài liệu, chứng nhận, giao hàng, hàng sẵn, hỗ trợ cắt, bảo hành/cam kết nếu dữ liệu không nói rõ.
 
 Tự chấm trước khi trả lời: không ảnh tối đa 6/10; thiếu dữ kiện sản phẩm tối đa 5/10; thiếu block chế biến/checklist/CTA thì viết lại; còn mùi AI thì viết lại.
 
@@ -434,6 +453,17 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
       throw e;
     }
   }
+  // Xoá bài đã đăng trên Page theo yêu cầu chủ Page. Đi qua admin API của service
+  // (cổng duyệt nằm trong service), không gọi thẳng Graph từ phía agent.
+  async function deletePost(id) {
+    if(config.mode!=='live') throw new Error('draft mode blocks marketing delete');
+    const current=store.marketingPost(id);
+    if(!current) throw new Error('Marketing post not found');
+    if(current.status!=='published') throw new Error('Only a published post can be deleted');
+    if(!current.facebook_post_id) throw new Error('Marketing post has no Facebook id');
+    await meta.deletePost(current.facebook_post_id);
+    return store.markMarketingDeleted(id,'operator_deleted');
+  }
   async function tick(now=Date.now()) {
     if(!config.marketing?.enabled || config.mode!=='live') return 0;
     let count=0;
@@ -450,7 +480,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     const timer=setIntervalFn(()=>tick().catch(onError),60000);
     return {stop(){clearIntervalFn(timer);}};
   }
-  return {createDraft,createAutoDraft,publishNow,tick,recoverStalePublishing,start,permissions,validateDraft};
+  return {createDraft,createAutoDraft,publishNow,deletePost,tick,recoverStalePublishing,start,permissions,validateDraft};
 }
 
 export { validateDraft, scoreMarketingSeo };

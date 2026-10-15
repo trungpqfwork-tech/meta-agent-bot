@@ -507,3 +507,64 @@ test('tài liệu hotline luôn được đưa vào prompt viết bài dù sourc
   assert.match(calls[1],/BẮT BUỘC thêm dòng/);
   assert.match(post.caption,/0976778755/);
 });
+
+test('bài đăng không giữ dòng giá: cắt dòng có giá, giữ hotline và CTA',async t=>{
+  const {c,s}=fixture(t,'live');
+  writeFileSync(c.knowledgeFile,JSON.stringify({schemaVersion:1,documents:[
+    {id:'product-tom',title:'Tôm thẻ hấp',keywords:['tôm thẻ'],content:'Tôm thẻ hấp size 25, giá buôn 275.000đ/kg.',approved:true,validUntil:null},
+    {id:'policy-hotline',title:'Hotline liên hệ Test Page',keywords:['hotline'],content:'Hotline Test Page: 0976778755 và 0962365073.',approved:true,validUntil:null}
+  ]}));
+  const caption=[
+    '🦐 TÔM THẺ HẤP SIZE 25',
+    '🔥 Tôm thẻ hấp cấp đông sâu, tiện cho bếp ăn.',
+    '📦 Giá buôn size 25: 275.000đ/kg (dưới 1 thùng) và 270.000đ/kg (từ 1 thùng).',
+    '💯 Test Page - nguồn hàng tôm thẻ hấp.',
+    '📞 Hotline: 0976778755 và 0962365073',
+    '💬 Inbox/comment để được tư vấn'
+  ].join('\n');
+  const calls=[];
+  const complete=async ({message})=>{ calls.push(message);
+    if(calls.length===1) return JSON.stringify({topic:'Tôm thẻ',prompt:'Viết bài tôm thẻ',source_ids:['product-tom'],reason:'x'});
+    return JSON.stringify({title_internal:'Tôm thẻ',caption,hashtags:['tom the'],cta:'Hotline',media:[],source_ids:['product-tom'],risk_flags:[]});
+  };
+  const marketing=createMarketing(c,s,complete,{listPublishedPosts:async()=>[]});
+  const post=await marketing.createAutoDraft({instruction:'test'});
+  assert.doesNotMatch(post.caption,/275\.000đ|270\.000đ|Giá buôn/i);
+  assert.match(post.caption,/0976778755/);
+  assert.match(post.caption,/Inbox\/comment/);
+  assert.match(post.caption,/TÔM THẺ HẤP SIZE 25/);
+  assert.deepEqual(JSON.parse(post.risk_flags).filter(f=>f==='price_line_removed'),['price_line_removed']);
+});
+test('stripPriceLines giữ dòng hotline và số size/thùng',async ()=>{
+  const {stripPriceLines}=await import('../src/marketing.mjs');
+  const r=stripPriceLines('🦐 TÔM SIZE 25\n📦 Giá: 275.000đ/kg\nQuy cách thùng 10 kg\n📞 Hotline: 0976778755 và 0962365073');
+  assert.equal(r.caption,'🦐 TÔM SIZE 25\nQuy cách thùng 10 kg\n📞 Hotline: 0976778755 và 0962365073');
+  assert.equal(r.removed.length,1);
+});
+
+test('xoá bài đã đăng: gọi Meta delete qua service rồi đánh dấu deleted',async t=>{
+  const {c,s}=fixture(t,'live');
+  const post=s.createMarketingPost({title_internal:'Tôm thẻ',caption:'🦐 TÔM THẺ HẤP',hashtags:'[]',media:'[]',source_ids:'[]'});
+  s.markMarketingPublished(post.id,{facebookPostId:'100_9',facebookPermalink:'https://facebook.com/100_9'});
+  let deletedId='';
+  const marketing=createMarketing(c,s,async()=>'{}',{deletePost:async id=>{deletedId=id;return true;},listPublishedPosts:async()=>[]});
+  const out=await marketing.deletePost(post.id);
+  assert.equal(deletedId,'100_9');
+  assert.equal(out.status,'deleted');
+  await assert.rejects(()=>marketing.deletePost(post.id),/Only a published post can be deleted/);
+  c.mode='draft';
+  await assert.rejects(()=>marketing.deletePost(post.id),/draft mode/);
+});
+
+test('admin API nhận route /delete và gọi marketing.deletePost',async t=>{
+  const {c,s}=fixture(t,'live');
+  const secrets={CSKH_ADMIN_TOKEN:'tok-delete'};
+  let deletedId='';
+  const marketing={deletePost:async id=>{deletedId=id;return {id,status:'deleted'};}};
+  const server=await startAdmin(c,secrets,s,marketing);t.after(()=>new Promise(r=>server.close(r)));
+  const url=`http://127.0.0.1:${c.adminPort}/marketing/posts/abc%2F1/delete`;
+  assert.equal((await fetch(url,{method:'POST',body:'{}'})).status,401);
+  const res=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+secrets.CSKH_ADMIN_TOKEN,'Content-Type':'application/json'},body:'{}'});
+  assert.equal(res.status,200);
+  assert.equal(deletedId,'abc/1');
+});

@@ -90,6 +90,15 @@ export function metaClient(config,secrets,fetcher=fetch) {
         attachments:Array.isArray(p.attachments?.data)?p.attachments.data.map(a=>({media_type:String(a.media_type??''),has_media:!!a.media,url:String(a.url??'')})):[]
       })).filter(p=>p.id && p.message).slice(0,25);
     },
+    // Xoá bài đã đăng. Chỉ admin API của service gọi hàm này (chủ Page yêu cầu);
+    // agent không có đường nào khác ghi lên Graph.
+    async deletePost(postId) {
+      const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
+      if(!postId) throw new Error('Meta post id required');
+      const r=await fetcher(`${base}/${String(postId)}`,{method:'DELETE',headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(20000)});
+      if(!r.ok) throw await metaError(r, 'Meta post delete failed');
+      return true;
+    },
     async publishFeedPost({message,link='',scheduledAt=0}={}) {
       const token=secrets.META_PAGE_PUBLISH_ACCESS_TOKEN || secrets.META_PAGE_ACCESS_TOKEN;
       const body={message:String(message??'')};
