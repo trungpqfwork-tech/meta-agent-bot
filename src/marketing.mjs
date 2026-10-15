@@ -47,6 +47,20 @@ function docPayload(docs, {budget=24000, perDoc=1000}={}) {
 // ảnh (ca thật 15/10/2026). Dùng đúng bộ khớp từ khoá của CSKH (imageScores:
 // trọng số IDF theo từng từ, khớp trọn trước khớp một phần) để lấy danh sách ngắn
 // theo chủ đề, rồi mới để model chọn thứ tự đăng.
+// Ảnh mà tài liệu KB gán cho mặt hàng (dòng "Ảnh: ga-nguyen-con-1, ...") là ảnh
+// người vận hành đã chọn cho đúng mặt hàng đó.
+export function docAssignedImageIds(docs=[], images=[]) {
+  const ids=[];
+  for(const d of arr(docs)) {
+    const line=/Ảnh:\s*([^\n]+)/i.exec(String(d?.content ?? ''));
+    if(!line) continue;
+    // Tài liệu hay viết "Ảnh: ga-1, ga-2." ở cuối câu: bỏ dấu câu dính sau id,
+    // nếu không id cuối bị coi là không tồn tại và mất ảnh đúng.
+    for(const raw of line[1].split(/[,;]/)) { const id=raw.trim().replace(/[.,;:\s]+$/,''); if(id) ids.push(id); }
+  }
+  const available=new Set(arr(images).map(i=>String(i?.id ?? '')));
+  return [...new Set(ids)].filter(id=>!available.size || available.has(id));
+}
 export function selectPostImages(config, {query='', caption='', docs=[], exclude=[], limit=12}={}) {
   let catalog;
   try { catalog = loadImageCatalog(config.imageCatalogFile).filter(i=>i.approved===true); }
@@ -61,12 +75,7 @@ export function selectPostImages(config, {query='', caption='', docs=[], exclude
   // hay copy id từ dòng "Ảnh:" trong tài liệu, mà danh sách gửi model lại bị cắt
   // theo điểm khớp nên id đúng có thể không có trong danh sách đó (ca thật
   // 15/10/2026: draft gấu bò bị chặn vì id gau-bo-1 nằm ngoài danh sách gửi model).
-  const docImageIds=[];
-  for(const d of arr(docs)) {
-    const line=/Ảnh:\s*([^\n]+)/i.exec(String(d?.content ?? ''));
-    if(!line) continue;
-    for(const raw of line[1].split(/[,;]/)) { const id=raw.trim(); if(id) docImageIds.push(id); }
-  }
+  const docImageIds=docAssignedImageIds(docs, catalog);
   push(docImageIds.map(id=>byId.get(id)).filter(Boolean));
   push(imageScores(catalog, String(query ?? '').slice(0,1200)));
   if(ranked.length < limit) {
@@ -74,10 +83,19 @@ export function selectPostImages(config, {query='', caption='', docs=[], exclude
     if(String(terms).trim()) push(imageScores(catalog, String(terms).slice(0,1200)));
   }
   const blocked=new Set(arr(exclude).map(String));
-  const fresh=ranked.filter(i=>!blocked.has(i.id));
   // Ảnh vừa dùng ở bài trước bị đẩy xuống cuối, chỉ quay lại khi chủ đề không còn
   // đủ ảnh mới: bài cùng sản phẩm đăng lại không được lặp y nguyên bộ ảnh cũ.
-  const ordered=[...fresh, ...ranked.filter(i=>blocked.has(i.id))];
+  // NHƯNG ảnh do tài liệu KB gán cho mặt hàng (dòng "Ảnh:") giữ nguyên thứ tự ưu
+  // tiên: mặt hàng thường chỉ có 2-3 ảnh, đẩy chúng xuống cuối là mất luôn ảnh đúng
+  // (ca thật 15/10/2026: bài tôm thẻ bị gán ảnh đùi gà, đuôi heo vì 3 ảnh tôm vừa
+  // dùng ở bài trước bị loại khỏi danh sách gửi model).
+  const docIds=new Set(docImageIds);
+  const docRanked=ranked.filter(i=>docIds.has(i.id));
+  const kwRanked=ranked.filter(i=>!docIds.has(i.id));
+  const ordered=[
+    ...docRanked.filter(i=>!blocked.has(i.id)), ...docRanked.filter(i=>blocked.has(i.id)),
+    ...kwRanked.filter(i=>!blocked.has(i.id)), ...kwRanked.filter(i=>blocked.has(i.id))
+  ];
   return ordered.slice(0, Math.max(1, Number(limit)||12)).map(trim);
 }
 // Model chỉ được chọn ảnh trong danh sách ngắn; nếu vẫn trả thiếu thì điền thêm
@@ -352,11 +370,13 @@ function isQuiet(ms,{timezone='Asia/Ho_Chi_Minh',quietHours='22:00-07:00'}={}) {
 export function createMarketing(config,store,complete,meta,{setIntervalFn=setInterval,clearIntervalFn=clearInterval,notifier=null}={}) {
   // Viết bài, chấm điểm, và nếu dưới ngưỡng thì viết lại (tối đa reviseAttempts
   // lần) với phản hồi nêu đúng lỗi cần sửa. Chỉ giữ bản điểm cao nhất.
-  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[]}) {
+  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery=''}) {
     const allDocs=approvedDocs(config.knowledgeFile), allImages=approvedImages(config.imageCatalogFile);
     const allowed=new Set(arr(sourceIds));
     const docs=withContactDocs(allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs, allDocs);
-    const shortlist=selectPostImages(config,{query:prompt,docs,exclude:excludeImageIds});
+    // Truy vấn chọn ảnh phải là chủ đề + mặt hàng (sạch), không phải cả brief kèm
+    // JSON tài liệu KB: brief dài làm ảnh sản phẩm khác lọt vào danh sách gửi model.
+    const shortlist=selectPostImages(config,{query:String(imageQuery||prompt),docs,exclude:excludeImageIds});
     const images=shortlist.length ? shortlist : allImages;
     const minScore=Number(config.marketing?.minScore??0);
     const reviseAttempts=minScore>0?Math.max(0,Number(config.marketing?.reviseAttempts??0)):0;
@@ -376,17 +396,22 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     }
     return {draft:best,seo:bestSeo,minScore};
   }
-  async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null,excludeImageIds=[]}={}) {
+  async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery=''}={}) {
     if(!config.marketing?.enabled) throw new Error('marketing disabled');
     const minImages=Math.max(1,Number(config.marketing?.minImagesPerPost??3));
     const maxImages=6;
     const alreadyUsed=arr(store.listMarketingPosts({limit:10}))
       .flatMap(p=>arr(JSON.parse(p.media||'[]')).map(m=>m?.image_id)).filter(Boolean).map(String);
     const exclude=[...new Set([...arr(excludeImageIds).map(String), ...alreadyUsed])];
-    const {draft,seo,minScore}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude});
+    const imageQueryText=String(imageQuery||prompt);
+    const {draft,seo,minScore}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude,imageQuery:imageQueryText});
     const selected=arr(sourceIds).length ? approvedDocs(config.knowledgeFile).filter(d=>sourceIds.includes(d.id)) : [];
-    const shortlist=selectPostImages(config,{query:prompt,caption:draft.caption,docs:selected,exclude});
-    const {media,enough}=ensureMinMedia(draft.media,shortlist,{min:minImages,max:maxImages});
+    const shortlist=selectPostImages(config,{query:imageQueryText,caption:draft.caption,docs:selected,exclude});
+    // Tài liệu gán đủ ảnh cho mặt hàng thì bài dùng đúng bộ ảnh đó, không để model
+    // chọn ảnh hàng khác (ca thật 15/10/2026: bài tôm thẻ bị gán ảnh đùi gà, đuôi heo).
+    const preferred=docAssignedImageIds(selected,shortlist).slice(0,maxImages);
+    const picked=preferred.length>=minImages ? preferred.map(id=>({type:'image',image_id:id})) : draft.media;
+    const {media,enough}=ensureMinMedia(picked,shortlist,{min:minImages,max:maxImages});
     draft.media=media;
     draft.risk_flags=draft.risk_flags.filter(f=>f!=='no_approved_image_available' && f!=='fewer_images_than_min');
     if(!enough) draft.risk_flags=[...new Set([...draft.risk_flags,'fewer_images_than_min'])];
@@ -424,7 +449,9 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
       selectedDocs.length?`KB được phép dùng: ${JSON.stringify(selectedDocs.map(d=>({id:d.id,title:d.title,content:String(d.content).slice(0,1000)})))}`:'',
       String(chosen.reason??'')?`Lý do chọn topic (không phải nguồn facts): ${String(chosen.reason).slice(0,300)}`:''
     ].filter(Boolean).join('\n');
-    return createDraft({prompt,tone:tone||chosen.tone||'bán hàng Facebook giống bài đã đăng của TM Food',scheduledAt,approvedBy,stylePosts,sourceIds});
+    const productTerms=selectedDocs.map(d=>String(d.title??'').trim()).filter(Boolean).slice(0,4).join(' ');
+    const imageQuery=[String(chosen.topic??'').trim(), String(instruction).trim(), productTerms].filter(Boolean).join(' ').slice(0,600);
+    return createDraft({prompt,tone:tone||chosen.tone||'bán hàng Facebook giống bài đã đăng của TM Food',scheduledAt,approvedBy,stylePosts,sourceIds,imageQuery});
   }
   async function publishNow(id,{quietHourOverride=false,now=Date.now()}={}) {
     if(!config.marketing?.enabled) throw new Error('marketing disabled');
