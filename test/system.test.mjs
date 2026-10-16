@@ -272,13 +272,15 @@ test('expired window blocks outgoing reply',async t=>{
   const {s,c}=fixture(t,'live');s.ingest([inbound('111','m1','giờ',Date.now()-25*3600000)]);let sent=0;
   await new Worker(c,s,completion(),{send:async()=>sent++}).process(s.next());assert.equal(sent,0);assert.equal(s.snapshot().jobs[0].delivery,'blocked_window');
 });
-test('bộ chấm từ chối cả 2 lượt thì gửi câu nháp + ghi audit, KHÔNG handoff (người vận hành chốt 02/10/2026)',async t=>{
+test('bộ chấm từ chối cả 2 lượt thì viết lại một lần rồi gửi + ghi audit, KHÔNG handoff (chủ Page chốt 16/10/2026)',async t=>{
   const {s,c}=fixture(t);assert.throws(()=>validateAnswer('{"action":"reply","text":"x","sourceIds":["fake"]}',[]));
-  s.ingest([inbound()]);await new Worker(c,s,async p=>p.system.includes('bộ kiểm tra')?'{"inScope":false,"supported":false}':answer,{}).process(s.next());
+  const rewritten=JSON.stringify({action:'reply',text:'Dạ em chỉ tư vấn sản phẩm của Page ạ.',sourceIds:['hours'],reason:''});
+  s.ingest([inbound()]);await new Worker(c,s,async p=>p.system.includes('bộ viết lại')?rewritten:p.system.includes('bộ kiểm tra')?'{"inScope":false,"supported":false}':answer,{}).process(s.next());
   assert.equal(s.conversation('111').state,'BOT','không được đẩy hội thoại sang WAITING vì bộ chấm');
   assert.equal(s.snapshot().jobs[0].status,'draft','câu nháp vẫn được gửi (draft)');
-  assert.match(s.snapshot().jobs[0].reply,/Mở cửa 8h/);
-  assert.ok(s.db.prepare("SELECT 1 FROM audit WHERE action='verify_failed_sent'").get(),'phải ghi audit để người thật soát');
+  assert.match(s.snapshot().jobs[0].reply,/chỉ tư vấn sản phẩm/,'gửi bản viết lại theo dữ kiện, không gửi câu bị chấm');
+  assert.ok(!/Mở cửa 8h/.test(s.snapshot().jobs[0].reply),'không gửi câu bị chấm là không đủ căn cứ');
+  assert.ok(s.db.prepare("SELECT 1 FROM audit WHERE action='verify_failed_rewritten'").get(),'phải ghi audit để người thật soát');
   assert.equal(s.handoffNotified(s.snapshot().jobs[0].id),false,'không bắn alert handoff');
 });
 test('model JSON parser tolerates fenced or prefixed JSON output',()=>{
