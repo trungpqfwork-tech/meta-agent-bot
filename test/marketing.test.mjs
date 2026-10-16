@@ -618,3 +618,16 @@ test('dòng hotline được chuẩn hoá về "và" giữa 2 số',async ()=>{
   assert.equal(normalizeHotlineLine('📞 Hotline: 0976778755 và 0962365073').changed,false);
   assert.equal(normalizeHotlineLine('💬 Inbox để được tư vấn').changed,false);
 });
+
+test('bài về hàng đã hấp chín bị cắt câu "tươi sống", hàng đông lạnh thường thì giữ nguyên',async ()=>{
+  const {stripFreshClaimForCooked}=await import('../src/marketing.mjs');
+  const cooked='🦐 TÔM THẺ HẤP SIZE 25\n🔥 Tôm thẻ hấp, cấp đông sâu nên chất lượng giữ gần như hàng tươi sống.\n📞 Hotline: 0976778755 và 0962365073';
+  const r=stripFreshClaimForCooked(cooked);
+  assert.equal(r.removed.length,1);
+  assert.doesNotMatch(r.caption,/tươi sống/);
+  assert.match(r.caption,/Hotline/);
+  const raw='🐷 DẢI HEO NHẬP KHẨU NGA\n🔥 Hàng đông lạnh cấp đông sâu, chất lượng giữ gần như hàng tươi sống.\n📞 Hotline: 0976778755 và 0962365073';
+  const r2=stripFreshClaimForCooked(raw);
+  assert.equal(r2.removed.length,0);
+  assert.equal(r2.caption,raw);
+});
