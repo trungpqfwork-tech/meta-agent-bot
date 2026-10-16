@@ -235,6 +235,11 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
   if(!draft.caption) throw new Error('Marketing caption required');
   const hotlineFixed=normalizeHotlineLine(draft.caption);
   if(hotlineFixed.changed) draft.caption=hotlineFixed.caption;
+  const freshFixed=stripFreshClaimForCooked(draft.caption);
+  if(freshFixed.removed.length) {
+    draft.caption=freshFixed.caption;
+    draft.risk_flags=[...new Set([...draft.risk_flags,'fresh_claim_removed_for_cooked_item'])].slice(0,20);
+  }
   const priceStripped=stripPriceLines(draft.caption);
   if(priceStripped.removed.length) {
     if(priceStripped.caption) draft.caption=priceStripped.caption;
@@ -281,6 +286,19 @@ export function normalizeHotlineLine(caption) {
     return rebuilt;
   });
   return {caption:out.join('\n'),changed};
+}
+// Hàng đã hấp/chín sẵn (ví dụ tôm thẻ hấp) không được nói "tươi sống" — chủ Page
+// chốt 16/10/2026. Model vẫn chép câu so sánh với hàng tươi sống từ tài liệu chung,
+// nên cắt hẳn dòng đó trước khi lưu và ghi cờ cho người duyệt.
+const COOKED_ITEM=/(hấp chín|đã hấp|thẻ hấp|hấp sẵn|hàng chín)/i;
+const FRESH_CLAIM=/(tươi sống|hàng tươi|như hàng tươi|tươi như)/i;
+export function stripFreshClaimForCooked(caption) {
+  const text=String(caption??'');
+  if(!COOKED_ITEM.test(text) || !FRESH_CLAIM.test(text)) return {caption:text,removed:[]};
+  const kept=[], removed=[];
+  for(const line of text.split('\n')) (FRESH_CLAIM.test(line)?removed:kept).push(line);
+  const cleaned=kept.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return cleaned ? {caption:cleaned, removed:removed.map(l=>l.trim()).filter(Boolean)} : {caption:text, removed:[]};
 }
 function isProductishDoc(d) {
   return /^product-|^category-|^usage-|^brand-/.test(String(d.id??''));
@@ -354,6 +372,7 @@ Cách viết cho ra bài đẹp:
 - Dùng bullet/list ngắn, dễ nhìn trên Facebook. Mỗi dòng 1 ý.
 - Từ ngữ bán hàng được phép tự nhiên: giòn ngon, sần sật, thơm, béo, ngọt, tiện, đa dạng món nếu phù hợp với KB/sản phẩm. Không nói "tươi", "sạch", "cao cấp", "cam kết", "100%" nếu không có nguồn.
 - Dòng tiêu đề và hashtag phải làm rõ sản phẩm; không viết chung chung "thực phẩm chất lượng".
+- Hàng ĐÃ HẤP/CHÍN sẵn (ví dụ tôm thẻ hấp): viết rõ là hàng hấp chín, rã đông là dùng được ngay; KHÔNG viết "tươi sống" hay "giữ như hàng tươi sống" cho hàng chín.
 - Bài luôn cần ảnh: ít nhất 3 ảnh khi danh sách ảnh liên quan có đủ, và ảnh phải đúng sản phẩm đang nói (không lấy ảnh hàng khác cho đủ số).
 
 Cấm hẳn (bài sẽ bị chấm điểm thấp nếu vi phạm):
