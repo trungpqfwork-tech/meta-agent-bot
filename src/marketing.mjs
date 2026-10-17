@@ -245,6 +245,11 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     if(priceStripped.caption) draft.caption=priceStripped.caption;
     draft.risk_flags=[...new Set([...draft.risk_flags,'price_line_removed'])].slice(0,20);
   }
+  const danglingFixed=stripDanglingQuestions(draft.caption);
+  if(danglingFixed.removed.length) {
+    draft.caption=danglingFixed.caption;
+    draft.risk_flags=[...new Set([...draft.risk_flags,'dangling_question_removed'])].slice(0,20);
+  }
   const sourceIds=new Set(docs.map(d=>d.id));
   for(const id of draft.source_ids) if(!sourceIds.has(id)) throw new Error(`Unknown marketing source: ${id}`);
   const imageIds=new Set(images.map(i=>i.id));
@@ -294,11 +299,34 @@ const COOKED_ITEM=/(hấp chín|đã hấp|thẻ hấp|hấp sẵn|hàng chín)/
 const FRESH_CLAIM=/(tươi sống|hàng tươi|như hàng tươi|tươi như)/i;
 export function stripFreshClaimForCooked(caption) {
   const text=String(caption??'');
-  if(!COOKED_ITEM.test(text) || !FRESH_CLAIM.test(text)) return {caption:text,removed:[]};
+  // Dòng hỏi kiểu "hàng đông lạnh hay hàng chín?" không phải lời khẳng định hàng
+  // chín: ca thật 17/10/2026, nháp mực ống (hàng sống cấp đông) bị cắt mất câu so
+  // sánh chất lượng chỉ vì bài có câu hỏi nhắc chữ "hàng chín".
+  const asserted=text.split('\n').filter(l=>!l.trim().endsWith('?')).join('\n');
+  if(!COOKED_ITEM.test(asserted) || !FRESH_CLAIM.test(text)) return {caption:text,removed:[]};
   const kept=[], removed=[];
   for(const line of text.split('\n')) (FRESH_CLAIM.test(line)?removed:kept).push(line);
   const cleaned=kept.join('\n').replace(/\n{3,}/g,'\n\n').trim();
   return cleaned ? {caption:cleaned, removed:removed.map(l=>l.trim()).filter(Boolean)} : {caption:text, removed:[]};
+}
+// Câu hỏi trong bài phải có câu trả lời ngay dưới (dòng bắt đầu bằng mũi tên).
+// Nháp mực ống 17/10/2026 để "❓ Rã đông có mất vị không?" rồi không đáp, đọc như
+// bài dở. Bỏ câu hỏi trống thay vì đăng câu hỏi không có câu trả lời.
+const QUESTION_LINE=/❓/;
+const ANSWER_LINE=/^(→|->|➜|=>|✔|✅|•|-|\*)/;
+export function stripDanglingQuestions(caption) {
+  const text=String(caption??'');
+  const lines=text.split('\n');
+  const kept=[], removed=[];
+  for(let i=0;i<lines.length;i++) {
+    const line=lines[i];
+    if(!QUESTION_LINE.test(line) || line.trim().length>160) { kept.push(line); continue; }
+    let j=i+1; while(j<lines.length && !lines[j].trim()) j++;
+    if(ANSWER_LINE.test((lines[j]??'').trim())) kept.push(line); else removed.push(line.trim());
+  }
+  if(!removed.length) return {caption:text,removed:[]};
+  const cleaned=kept.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return cleaned ? {caption:cleaned,removed} : {caption:text,removed:[]};
 }
 function isProductishDoc(d) {
   return /^product-|^category-|^usage-|^brand-/.test(String(d.id??''));
@@ -354,7 +382,7 @@ Trả JSON duy nhất:
 // mẫu giống nhau (đo được 7/13 dòng trùng nguyên văn giữa 2 bài liền nhau).
 export const POST_ANGLES = [
   {id:'mon-cach-dung', name:'Món và cách dùng', positioning:true, brief:'Kể 2-4 món hoặc cách chế biến THẬT có trong tài liệu và nói món đó hợp với ai. Nếu tài liệu không ghi món cụ thể thì chuyển sang nói cách dùng/nhóm khách phù hợp, KHÔNG tự nghĩ ra món.'},
-  {id:'hoi-dap', name:'Hỏi đáp khách hay hỏi', positioning:false, brief:'Viết như đang trả lời một câu hỏi khách hay hỏi về mặt hàng này (quy cách đóng gói, hàng đông lạnh hay hàng chín, cách rã đông và bảo quản, dùng cho việc gì) và trả lời gọn bằng dữ kiện trong tài liệu.'},
+  {id:'hoi-dap', name:'Hỏi đáp khách hay hỏi', positioning:false, brief:'Viết như đang trả lời một câu hỏi khách hay hỏi về mặt hàng này (quy cách đóng gói, hàng đông lạnh hay hàng chín, cách rã đông và bảo quản, dùng cho việc gì) và trả lời gọn bằng dữ kiện trong tài liệu. Mỗi câu hỏi PHẢI có dòng trả lời ngay dưới (bắt đầu bằng →); điều gì tài liệu không trả lời được thì KHÔNG hỏi, không để câu hỏi trống.'},
   {id:'chon-hang-theo-nhu-cau', name:'Chọn hàng theo nhu cầu', positioning:true, brief:'Nói từng nhóm nhu cầu (bếp ăn công nghiệp, nhà hàng, quán lẩu nướng, khách mua về dùng) cần gì ở mặt hàng này và vì sao phù hợp, dùng 2-4 gạch đầu dòng ngắn cho từng nhóm.'},
   {id:'ngan-gon', name:'Ngắn gọn', positioning:false, brief:'Bài ngắn 3-5 dòng như tin nhắn bán hàng: 1 dòng tên hàng và đặc điểm chính, 1 dòng khách phù hợp, 1 dòng CTA. Không tiêu đề in hoa, không gạch đầu dòng, tối đa 2 emoji.'},
   {id:'kho-hang', name:'Kho hàng và bảo quản', positioning:false, brief:'Kể chuyện hàng về kho/theo đợt: nhập từ đâu, đóng thùng ra sao, cách bảo quản và mẹo rã đông đúng cách, kèm 1-2 lưu ý khi dùng. Chỉ nêu dữ kiện có trong tài liệu.'}
