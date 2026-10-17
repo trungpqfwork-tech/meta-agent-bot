@@ -115,3 +115,15 @@ test('câu hỏi nhắc "hàng chín" không bị coi là khẳng định hàng 
   assert.equal(r2.removed.length,1);
   assert.ok(!/tươi sống/.test(r2.caption));
 });
+
+test('bài thứ 4 chọn dạng chưa dùng trong 3 bài gần nhất', () => {
+  const used=[POST_ANGLES[0].id,POST_ANGLES[1].id,POST_ANGLES[2].id];
+  const a=pickAngle(used);
+  assert.ok(!used.includes(a.id),'không lặp dạng của 3 bài trước');
+  const used2=[POST_ANGLES[3].id,POST_ANGLES[4].id];
+  const b=pickAngle(used2);
+  assert.ok(!used2.includes(b.id));
+  // hết chỗ thì vẫn trả về một dạng hợp lệ, không lặp bài liền trước
+  const all=POST_ANGLES.map(a=>a.id);
+  assert.ok(pickAngle(all,{exclude:[POST_ANGLES[0].id,POST_ANGLES[1].id,POST_ANGLES[2].id,POST_ANGLES[3].id]}).id!==all[0]);
+});
