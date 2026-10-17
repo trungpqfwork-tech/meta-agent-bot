@@ -392,16 +392,20 @@ export const POST_ANGLES = [
 export const REPEAT_MAX_RATIO = 0.4;
 const ANGLE_META_KEY = 'marketing.recent_angles';
 export function pickAngle(recentAngles=[], {exclude=[]}={}) {
-  const blocked=new Set([...arr(recentAngles).slice(0,2).map(String),...arr(exclude).map(String)]);
-  const free=POST_ANGLES.filter(a=>!blocked.has(a.id));
-  const pool=free.length?free:POST_ANGLES;
-  const idx=POST_ANGLES.findIndex(a=>a.id===String(arr(recentAngles)[0] ?? ''));
-  if(idx<0) return pool[0];
-  for(let step=1;step<=POST_ANGLES.length;step++) {
-    const cand=POST_ANGLES[(idx+step)%POST_ANGLES.length];
-    if(pool.includes(cand)) return cand;
+  const used=arr(recentAngles).map(String);
+  const blocked=new Set(arr(exclude).map(String));
+  const last=POST_ANGLES.findIndex(a=>a.id===String(used[0] ?? ''));
+  const start=last<0 ? 0 : (last+1)%POST_ANGLES.length;
+  const rr=POST_ANGLES.map((_,k)=>POST_ANGLES[(start+k)%POST_ANGLES.length]);
+  // Ưu tiên dạng chưa dùng trong 3 bài gần nhất rồi mới nới ra 2 bài: với 3 bài
+  // liên tiếp mà chỉ né 2 bài thì bài thứ 4 lặp lại y dạng của bài đầu (mà 5 dạng
+  // thì thừa chỗ để khác nhau).
+  for(const depth of [3,2,0]) {
+    const recent=new Set(used.slice(0,depth));
+    const free=rr.filter(a=>!recent.has(a.id) && !blocked.has(a.id));
+    if(free.length) return free[0];
   }
-  return pool[0];
+  return rr[0];
 }
 // Dòng bắt buộc theo chính sách (hotline + CTA) bị loại khỏi phép đo: bài nào cũng
 // phải có, tính vào sẽ khiến mọi bài ngắn bị coi là trùng khung.
