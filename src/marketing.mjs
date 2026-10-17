@@ -350,22 +350,76 @@ Candidate từ KB: ${JSON.stringify(candidates)}
 Trả JSON duy nhất:
 {"topic":"tên/chủ đề cụ thể","prompt":"brief cụ thể để viết bài, gồm sản phẩm, nguồn facts, khách phù hợp, món/cách dùng; không đưa facts ngoài KB","tone":"style TM Food học từ bài đã đăng","source_ids":["id KB được chọn"],"reason":"vì sao chọn"}`;
 }
-function marketingPrompt(config,{prompt,tone,scheduledAt,feedback='',stylePosts=[]},docs,images) {
+// Năm dạng bài luân phiên. Chủ Page chốt 17/10/2026 sau khi các bài đăng bị khuân
+// mẫu giống nhau (đo được 7/13 dòng trùng nguyên văn giữa 2 bài liền nhau).
+export const POST_ANGLES = [
+  {id:'mon-cach-dung', name:'Món và cách dùng', positioning:true, brief:'Kể 2-4 món hoặc cách chế biến THẬT có trong tài liệu và nói món đó hợp với ai. Nếu tài liệu không ghi món cụ thể thì chuyển sang nói cách dùng/nhóm khách phù hợp, KHÔNG tự nghĩ ra món.'},
+  {id:'hoi-dap', name:'Hỏi đáp khách hay hỏi', positioning:false, brief:'Viết như đang trả lời một câu hỏi khách hay hỏi về mặt hàng này (quy cách đóng gói, hàng đông lạnh hay hàng chín, cách rã đông và bảo quản, dùng cho việc gì) và trả lời gọn bằng dữ kiện trong tài liệu.'},
+  {id:'chon-hang-theo-nhu-cau', name:'Chọn hàng theo nhu cầu', positioning:true, brief:'Nói từng nhóm nhu cầu (bếp ăn công nghiệp, nhà hàng, quán lẩu nướng, khách mua về dùng) cần gì ở mặt hàng này và vì sao phù hợp, dùng 2-4 gạch đầu dòng ngắn cho từng nhóm.'},
+  {id:'ngan-gon', name:'Ngắn gọn', positioning:false, brief:'Bài ngắn 3-5 dòng như tin nhắn bán hàng: 1 dòng tên hàng và đặc điểm chính, 1 dòng khách phù hợp, 1 dòng CTA. Không tiêu đề in hoa, không gạch đầu dòng, tối đa 2 emoji.'},
+  {id:'kho-hang', name:'Kho hàng và bảo quản', positioning:false, brief:'Kể chuyện hàng về kho/theo đợt: nhập từ đâu, đóng thùng ra sao, cách bảo quản và mẹo rã đông đúng cách, kèm 1-2 lưu ý khi dùng. Chỉ nêu dữ kiện có trong tài liệu.'}
+];
+// Tỉ lệ dòng trùng tối đa cho phép giữa bài mới và 3 bài gần nhất; vượt ngưỡng thì
+// hệ thống tự viết lại bằng dạng khác (chủ Page chốt ngưỡng 40% ngày 17/10/2026).
+export const REPEAT_MAX_RATIO = 0.4;
+const ANGLE_META_KEY = 'marketing.recent_angles';
+export function pickAngle(recentAngles=[], {exclude=[]}={}) {
+  const blocked=new Set([...arr(recentAngles).slice(0,2).map(String),...arr(exclude).map(String)]);
+  const free=POST_ANGLES.filter(a=>!blocked.has(a.id));
+  const pool=free.length?free:POST_ANGLES;
+  const idx=POST_ANGLES.findIndex(a=>a.id===String(arr(recentAngles)[0] ?? ''));
+  if(idx<0) return pool[0];
+  for(let step=1;step<=POST_ANGLES.length;step++) {
+    const cand=POST_ANGLES[(idx+step)%POST_ANGLES.length];
+    if(pool.includes(cand)) return cand;
+  }
+  return pool[0];
+}
+// Dòng bắt buộc theo chính sách (hotline + CTA) bị loại khỏi phép đo: bài nào cũng
+// phải có, tính vào sẽ khiến mọi bài ngắn bị coi là trùng khung.
+const MANDATORY_LINE=/(hotline|inbox|comment|liên hệ|tư vấn)/;
+function captionLines(text) {
+  return String(text ?? '').split('\n')
+    .map(l=>l.trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,'').replace(/\s+/g,' '))
+    .filter(l=>l.length>=3 && !MANDATORY_LINE.test(l));
+}
+// Tỉ lệ dòng KHÔNG bắt buộc trùng nhau giữa bài mới và một bài cũ (0..1). Hai bài
+// chỉ khác tên hàng thường trùng trên 40% số dòng; đây là rào phát hiện khuân mẫu.
+export function captionRepeatRatio(caption,others=[]) {
+  const mine=captionLines(caption);
+  let worst={ratio:0,shared:0,lines:mine.length,withId:null};
+  if(mine.length<2) return worst;
+  for(const other of arr(others)) {
+    const id=typeof other==='string' ? null : (other?.id ?? null);
+    const their=captionLines(typeof other==='string' ? other : other?.caption);
+    if(their.length<2) continue;
+    const set=new Set(their);
+    const shared=mine.filter(l=>set.has(l)).length;
+    const ratio=shared/Math.min(mine.length,their.length);
+    if(ratio>worst.ratio) worst={ratio,shared,lines:Math.min(mine.length,their.length),withId:id};
+  }
+  return worst;
+}
+function marketingPrompt(config,{prompt,tone,scheduledAt,feedback='',stylePosts=[],angle=POST_ANGLES[0]},docs,images) {
   return `Bạn viết bài Facebook cho Page ${config.pageName}. Style ưu tiên là bài bán hàng Facebook như mẫu TM Food: nhìn vào là thấy sản phẩm, món dùng được, khách hàng phù hợp, lợi ích mua sỉ/lẻ và cách liên hệ. Không viết kiểu đoạn văn blog.
 
 Chỉ dùng dữ liệu nội bộ đã duyệt và yêu cầu của admin. Không bịa giá, tồn kho, khuyến mãi, chứng nhận, chính sách, số điện thoại hoặc cam kết chất lượng. Nếu thiếu dữ kiện, bỏ dòng đó hoặc dùng inbox/comment thay cho hotline.
 
 Trả JSON duy nhất với keys title_internal, caption, hashtags, cta, media, link, scheduled_at_hint, source_ids, risk_flags, confidence.
 
-FORMAT BẮT BUỘC cho caption, theo bài mẫu đẹp:
-1. Dòng 1: tiêu đề ngắn có emoji sản phẩm + TÊN SẢN PHẨM viết nổi bật, ví dụ "🥩 BẮP HOA BÒ - GIÒN NGON SẦN SẬT, ĐA DẠNG MÓN NGON". Không dùng dấu gạch dài kiểu —/–.
-2. Đoạn mô tả 1-2 câu mở bằng emoji phù hợp như 🔥, nói đúng sản phẩm, xuất xứ/đặc điểm/cách dùng có trong KB.
-3. Một block "✅ Chế biến đa dạng:" rồi 2-5 dòng món/cách chế biến nếu KB có món/cách dùng rõ ràng. Nếu KB chỉ nói nhóm khách/hoàn cảnh dùng (nhà hàng, quán ăn, bếp ăn, nấu cỗ, tiệc) mà không nêu món cụ thể, ĐỔI THÀNH block "✅ Phù hợp cho:" và chỉ liệt kê nhóm khách/hoàn cảnh. Không tự thêm món như xào sả ớt, nấu chua, hấp mật ong, salad, khoai lang, bánh nếp, mâm cỗ.
-4. Một dòng định vị: "💯 ${config.pageName} - ..." nêu vai trò cho nhà hàng, quán ăn, bếp ăn, đại lý nếu KB hỗ trợ. Không tự nhận số 1/uy tín/chất lượng vượt trội.
-5. 2-4 dòng checklist bắt đầu bằng "✔" về nguồn gốc/cách dùng/đối tượng khách nếu có nguồn. Không viết hàng sẵn, giao hàng, giá tốt, giá mềm, báo giá sỉ/lẻ theo thị trường, hỗ trợ cắt nếu KB/admin prompt không nói rõ.
-6. CTA cuối: nếu tài liệu có hotline thì BẮT BUỘC thêm dòng "📞 Hotline: <đủ các số trong tài liệu>" (giữ nguyên số, không rút gọn, không thêm số khác; giữa 2 số dùng chữ "và", không dùng gạch ngang/gạch dài), rồi tới dòng "💬 Inbox/comment để được tư vấn". Nếu tài liệu không có số thì dùng "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn".
-7. Hashtags: trả về 4-6 cụm từ khoá ngắn, KHÔNG dấu, KHÔNG ký tự # (ví dụ: "bap hoa bo", "thit bo nhap khau", "thuc pham dong lanh"). Hệ thống tự ghép thành hashtag chuẩn.
-8. Ảnh: danh sách "Ảnh liên quan" bên dưới ĐÃ ĐƯỢC LỌC theo chủ đề. Chọn TỐI THIỂU 3 ảnh (tối đa 6) nếu danh sách có từ 3 ảnh, xếp theo thứ tự muốn đăng, chỉ dùng image_id trong danh sách đó: media [{"type":"image","image_id":"..."}]. Chỉ khi danh sách dưới 3 ảnh mới lấy hết và thêm risk_flags "fewer_images_than_min".
+QUY TẮC CAPTION (bắt buộc). Mỗi bài viết theo ĐÚNG MỘT dạng bài dưới đây:
+DẠNG BÀI HÔM NAY: "${angle.name}" - ${angle.brief}
+
+Bài phải đọc như một bài mới, KHÔNG khuân lại một khuôn. Không phải bài nào cũng "tiêu đề IN HOA -> đoạn 🔥 -> block ✅ -> dòng 💯 ${config.pageName} - nguồn hàng... -> gạch đầu dòng ✔ -> hotline": chỉ dùng những khối đó khi dạng bài cần, và câu mở bài/cách xuống dòng/độ dài phải khác bài gần nhất.
+1. Dòng đầu là câu mở cụ thể, gọn dưới 140 ký tự, nêu đúng sản phẩm; không mở bằng "ngày nay / bạn đang tìm kiếm" và không mở bằng câu hỏi rồi tự trả lời. Dạng "Ngắn gọn" không in hoa cả dòng.
+2. Mỗi dòng 1 ý, xuống dòng thoáng, không viết đoạn văn dài kiểu blog. Độ dài theo dạng: dạng "Ngắn gọn" 3-5 dòng, các dạng khác 6-14 dòng.
+3. Chỉ dùng dữ kiện có trong tài liệu: sản phẩm, xuất xứ/thương hiệu, quy cách, nhóm khách, món/cách chế biến, bảo quản. Thiếu dữ kiện thì bỏ ý đó, không suy đoán và không mượn dữ kiện của mặt hàng khác.
+4. Emoji đúng sản phẩm, tiết chế theo mặt hàng (dạng "Ngắn gọn" tối đa 2 emoji). Không rải emoji mỗi dòng cho đủ.
+5. Dòng định vị "💯 ${config.pageName} - ..." CHỈ được dùng ở dạng "Món và cách dùng" và "Chọn hàng theo nhu cầu". Các dạng khác KHÔNG dùng dòng này.
+6. Nhóm khách/hoàn cảnh dùng nêu tự nhiên theo dạng, không lặp y nguyên cùng một danh sách "Bếp ăn / Nhà hàng / Khách sạn / Quán lẩu nướng" ở mọi bài.
+7. CTA cuối: nếu tài liệu có hotline thì BẮT BUỘC thêm dòng "📞 Hotline: <đủ các số trong tài liệu>" (giữ nguyên số, không rút gọn, không thêm số khác; giữa 2 số dùng chữ "và", không dùng gạch ngang/gạch dài), rồi tới dòng "💬 Inbox/comment để được tư vấn". Nếu tài liệu không có số thì dùng "📞 Liên hệ ${config.pageName} để nhận báo giá/tư vấn" hoặc "💬 Inbox/comment để được tư vấn".
+8. Hashtags: trả về 4-6 cụm từ khoá ngắn, KHÔNG dấu, KHÔNG ký tự # (ví dụ: "bap hoa bo", "thit bo nhap khau", "thuc pham dong lanh"). Hệ thống tự ghép thành hashtag chuẩn.
+9. Ảnh: danh sách "Ảnh liên quan" bên dưới ĐÃ ĐƯỢC LỌC theo chủ đề. Chọn TỐI THIỂU 3 ảnh (tối đa 6) nếu danh sách có từ 3 ảnh, xếp theo thứ tự muốn đăng, chỉ dùng image_id trong danh sách đó: media [{"type":"image","image_id":"..."}]. Chỉ khi danh sách dưới 3 ảnh mới lấy hết và thêm risk_flags "fewer_images_than_min".
 
 Cách viết cho ra bài đẹp:
 - Được dùng emoji chức năng giống mẫu: 🥩 🔥 ✅ 🍲 🍛 🍜 💯 ✔ 📞 ☎ 💬. Emoji phải đúng sản phẩm (gà thì 🐔/🍗, heo 🐷, bò 🥩, cá 🐟, hải sản 🦐/🐙) và giúp quét nội dung, không rải lung tung.
@@ -403,10 +457,17 @@ function isQuiet(ms,{timezone='Asia/Ho_Chi_Minh',quietHours='22:00-07:00'}={}) {
   return start<end ? now>=start && now<end : now>=start || now<end;
 }
 
+function readRecentAngles(store) {
+  try { const raw=store.getMeta ? store.getMeta(ANGLE_META_KEY) : null; return arr(raw?JSON.parse(raw):[]).map(String).slice(0,5); }
+  catch { return []; }
+}
+function writeRecentAngles(store,list) {
+  try { store.setMeta?.(ANGLE_META_KEY,JSON.stringify(arr(list).map(String).slice(0,5))); } catch {}
+}
 export function createMarketing(config,store,complete,meta,{setIntervalFn=setInterval,clearIntervalFn=clearInterval,notifier=null}={}) {
   // Viết bài, chấm điểm, và nếu dưới ngưỡng thì viết lại (tối đa reviseAttempts
   // lần) với phản hồi nêu đúng lỗi cần sửa. Chỉ giữ bản điểm cao nhất.
-  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery=''}) {
+  async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery='',angle=POST_ANGLES[0],recentCaptions=[],recentAngles=[]}) {
     const allDocs=approvedDocs(config.knowledgeFile), allImages=approvedImages(config.imageCatalogFile);
     const allowed=new Set(arr(sourceIds));
     const docs=withContactDocs(allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs, allDocs);
@@ -416,31 +477,50 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     const images=shortlist.length ? shortlist : allImages;
     const minScore=Number(config.marketing?.minScore??0);
     const reviseAttempts=minScore>0?Math.max(0,Number(config.marketing?.reviseAttempts??0)):0;
-    let best=null, bestSeo=null;
-    for(let attempt=0; attempt<=reviseAttempts; attempt++) {
-      const feedback=attempt===0?'':[
+    // Số lượt: lượt đầu + số lượt sửa theo điểm SEO + 1 lượt cho rào chống lặp khung.
+    const maxAttempts=1+reviseAttempts+1;
+    let best=null, bestSeo=null, bestRepeat=null, bestAngle=angle;
+    let current=angle; const tried=[];
+    for(let attempt=0; attempt<maxAttempts; attempt++) {
+      const seoFeedback=attempt!==0 && minScore>0 && bestSeo && bestSeo.score<minScore ? [
         `Bản trước bị chấm ${bestSeo.score}/10, dưới ngưỡng ${minScore}/10.`,
         bestSeo.notes.length?`Lỗi cần sửa: ${bestSeo.notes.join('; ')}.`:'',
         'Viết lại hoàn toàn, giữ đúng dữ kiện KB, không thêm số liệu hay cam kết mới.'
-      ].filter(Boolean).join(' ');
-      const text=await complete({agentId:config.agentId,message:marketingPrompt(config,{prompt,tone,scheduledAt,feedback,stylePosts},docs,images),system:'Bạn viết bài Facebook marketing và chỉ trả JSON.',timeoutMs:config.agentTimeoutMs});
+      ].filter(Boolean).join(' ') : '';
+      const repeatFeedback=attempt!==0 && bestRepeat && bestRepeat.ratio>=REPEAT_MAX_RATIO ? [
+        `Bản trước trùng ${Math.round(bestRepeat.ratio*100)}% số dòng với một bài vừa đăng/vừa soạn (bài: ${bestRepeat.withId ?? 'gần nhất'}).`,
+        `Viết lại theo dạng "${current.name}" với câu mở bài, cách trình bày và độ dài KHÁC HẲN, không dùng lại các dòng đã có ở bài đó.`
+      ].join(' ') : '';
+      const feedback=[seoFeedback,repeatFeedback].filter(Boolean).join(' ');
+      const text=await complete({agentId:config.agentId,message:marketingPrompt(config,{prompt,tone,scheduledAt,feedback,stylePosts,angle:current},docs,images),system:'Bạn viết bài Facebook marketing và chỉ trả JSON.',timeoutMs:config.agentTimeoutMs});
       const parsed=parseModelJson(text);
       const draft=validateDraft(parsed,{docs,images,config,topic:prompt});
       const seo=scoreMarketingSeo(draft);
-      if(!best || seo.score>bestSeo.score) { best=draft; bestSeo=seo; }
-      if(seo.score>=minScore) break;
+      const repeat=captionRepeatRatio(draft.caption,recentCaptions);
+      const seoOk=minScore<=0 || seo.score>=minScore;
+      const repeatOk=repeat.ratio<REPEAT_MAX_RATIO;
+      if(seoOk && repeatOk) { best=draft; bestSeo=seo; bestRepeat=repeat; bestAngle=current; break; }
+      if(!best || seo.score>bestSeo.score) { best=draft; bestSeo=seo; bestRepeat=repeat; bestAngle=current; }
+      if(!repeatOk) { tried.push(current.id); current=pickAngle(recentAngles,{exclude:tried}); }
     }
-    return {draft:best,seo:bestSeo,minScore};
+    return {draft:best,seo:bestSeo,minScore,angle:bestAngle,repeat:bestRepeat};
   }
   async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery=''}={}) {
     if(!config.marketing?.enabled) throw new Error('marketing disabled');
     const minImages=Math.max(1,Number(config.marketing?.minImagesPerPost??3));
     const maxImages=6;
-    const alreadyUsed=arr(store.listMarketingPosts({limit:10}))
+    const recentPosts=arr(store.listMarketingPosts({limit:10}));
+    const alreadyUsed=recentPosts
       .flatMap(p=>arr(JSON.parse(p.media||'[]')).map(m=>m?.image_id)).filter(Boolean).map(String);
+    // Rào chống khuân mẫu: so với 3 bài gần nhất; trùng >=40% số dòng thì viết lại
+    // bằng dạng khác (chủ Page chốt 17/10/2026).
+    const recentCaptions=recentPosts.filter(p=>p.status!=='deleted' && p.caption).slice(0,3)
+      .map(p=>({id:String(p.id).slice(0,8),caption:p.caption}));
+    const recentAngles=readRecentAngles(store);
+    const angle=pickAngle(recentAngles);
     const exclude=[...new Set([...arr(excludeImageIds).map(String), ...alreadyUsed])];
     const imageQueryText=String(imageQuery||prompt);
-    const {draft,seo,minScore}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude,imageQuery:imageQueryText});
+    const {draft,seo,minScore,angle:usedAngle,repeat}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude,imageQuery:imageQueryText,angle,recentCaptions,recentAngles});
     const selected=arr(sourceIds).length ? approvedDocs(config.knowledgeFile).filter(d=>sourceIds.includes(d.id)) : [];
     const shortlist=selectPostImages(config,{query:imageQueryText,caption:draft.caption,docs:selected,exclude});
     // Tài liệu gán đủ ảnh cho mặt hàng thì bài dùng đúng bộ ảnh đó, không để model
@@ -452,7 +532,13 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     draft.risk_flags=draft.risk_flags.filter(f=>f!=='no_approved_image_available' && f!=='fewer_images_than_min');
     if(!enough) draft.risk_flags=[...new Set([...draft.risk_flags,'fewer_images_than_min'])];
     const below=minScore>0 && seo.score<minScore;
-    const riskFlags=below?[...new Set([...draft.risk_flags,`low_seo_score_${seo.score}`])]:draft.risk_flags;
+    const repeated=repeat && repeat.ratio>=REPEAT_MAX_RATIO;
+    const riskFlags=[...new Set([
+      ...draft.risk_flags,
+      ...(below?[`low_seo_score_${seo.score}`]:[]),
+      ...(repeated?[`template_repeat_${Math.round(repeat.ratio*100)}pct`]:[])
+    ])];
+    writeRecentAngles(store,[usedAngle.id,...recentAngles]);
     const post=store.createMarketingPost({...draft,risk_flags:riskFlags,topic:prompt});
     // lowScoreAction=hold: bài dưới ngưỡng không được đẩy lên Telegram, chỉ nằm
     // trong admin UI để chủ Page tự xem/sửa.

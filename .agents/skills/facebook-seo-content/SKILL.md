@@ -19,17 +19,31 @@ Use this skill when creating, editing, or scoring Facebook Page posts for TM Foo
 
 The service runs `detectAiTells()` from `src/seoscore.mjs` over every caption; a
 hit costs a point and is listed in the preview. The target style is not a plain
-blog paragraph. Use the TM Food sales-post format:
+blog paragraph, but it is also NOT one fixed skeleton: the Page owner rejected
+posts that all "copy the same mould" (measured: 7 of 13 lines identical between
+two consecutive posts, 17/10/2026). Every post is written in ONE of five rotating
+angles (`POST_ANGLES` in `src/marketing.mjs`), and the angle must not repeat the
+last two posts:
 
-- First line: product emoji + short uppercase product headline.
-- Short product paragraph with a useful emoji such as 🔥.
-- A `✅ Chế biến đa dạng:` block with 3-5 dish/use-case bullet lines.
-- A `💯 TMFood - ...` positioning line for nhà hàng/quán ăn/bếp ăn/đại lý only
-  when supported by KB.
-- 3-5 `✔` checklist lines for sourced, stable claims only.
+1. `Món và cách dùng` — dishes/uses that the KB supports, for whom.
+2. `Hỏi đáp khách hay hỏi` — answer one common customer question from KB facts.
+3. `Chọn hàng theo nhu cầu` — what each buyer segment (bếp ăn, nhà hàng, quán
+   lẩu nướng, mua về dùng) needs and why this product fits.
+4. `Ngắn gọn` — 3-5 lines, no uppercase headline, no `✔` block, max 2 emoji.
+5. `Kho hàng và bảo quản` — origin, packing, storage, defrost guidance.
+
+Always required, whatever the angle:
+
 - Contact/CTA line with 📞/☎/💬. Use phone numbers only when the KB/admin prompt
   provides them; otherwise use inbox/comment.
-- Hashtags at the end.
+- Hashtags at the end (3-6, specific).
+- A first line that is specific and under ~140 characters, never a
+  question-then-answer opener.
+- The `💯 TMFood - ...` positioning line only in `Món và cách dùng` and
+  `Chọn hàng theo nhu cầu`, and only when KB supports it. Never in the other three.
+- The `✅` block and `✔` checklist are optional: at most one block, only when the
+  angle needs a list. Do not repeat the same
+  "Bếp ăn / Nhà hàng / Khách sạn / Quán lẩu nướng" list in every post.
 
 Do not write any of these:
 
@@ -56,16 +70,20 @@ configured gate and check the "Cần cải thiện" list before sending.
 
 ## Caption structure
 
-A good Facebook sales post has:
+Pick the angle first (rotate, never the same angle as the last two posts), then write:
 
-1. A strong headline: product emoji + product name + concrete selling point.
-2. Product fact: origin, brand trait, use case, or cut/variant from approved KB.
-3. A `Chế biến đa dạng`/use-case block with 3-5 bullet lines.
-4. Audience fit: gia đình, nhà hàng, quán ăn, bếp ăn, khách sỉ/lẻ when supported.
-5. A short checklist of sourced advantages, not invented promises.
-6. CTA: inbox/comment/phone only when provided to get the right product/variant.
-7. Hashtags: 4-6 relevant tags. Prefer specific tags over generic tags.
-8. Image hint: use approved image ids when available; otherwise flag `no_approved_image_available`.
+Hook line that names the product and a concrete selling point, under ~140
+characters. Then the body the angle calls for. Then the required closing lines:
+
+1. CTA: inbox/comment/phone only when provided to get the right product/variant.
+2. Hashtags: 3-6 relevant tags. Prefer specific tags over generic tags.
+3. Image hint: use approved image ids when available; otherwise flag `no_approved_image_available`.
+
+Anti-repeat gate: before the draft is shown for approval, `captionRepeatRatio()`
+compares it with the previous three captions, ignoring the mandatory hotline/CTA
+lines. At or above 40 per cent of non-mandatory lines duplicated, the service
+rewrites the caption in a different angle once and tags the post
+`template_repeat_<n>pct` if the copy is still too close.
 
 ## Live Page style learned from published posts
 
@@ -73,8 +91,9 @@ The service can read the Page's own `published_posts` with the Page publish toke
 Recent TM Food posts follow this shape:
 
 - 7-15 non-empty lines, usually one approved image attached.
-- First line is a product headline with emoji and uppercase product name, e.g.
-  `🥩 BẮP HOA BÒ – GIÒN NGON SẦN SẬT, ĐA DẠNG MÓN NGON`.
+- First line is usually a product headline with emoji, e.g.
+  `🥩 BẮP HOA BÒ – GIÒN NGON SẦN SẬT, ĐA DẠNG MÓN NGON`. That is one option, not a
+  rule: `Ngắn gọn` posts open with a plain sentence and no uppercase line.
 - 5-9 hashtags are common. The brand tag appears as `#TMfood` in older posts,
   followed by product + category + buyer-intent tags such as `#ThitBoNhapKhau`,
   `#ThucPhamDongLanh`, `#NguonHangNhaHang`, `#GiaSiThucPham`.

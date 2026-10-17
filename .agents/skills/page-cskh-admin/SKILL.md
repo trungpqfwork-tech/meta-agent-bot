@@ -1,7 +1,7 @@
 ---
 name: page-cskh-admin
-description: "Use when operating the page-cskh CSKH bot — KB updates, reply behavior, stuck conversations, deploy diagnostics."
-version: 1.0.0
+description: "Use when operating the page-cskh CSKH bot — KB updates, reply behavior, stuck conversations, marketing posts, deploy diagnostics."
+version: 1.1.0
 ---
 
 # Page CSKH — admin/ops
@@ -399,6 +399,71 @@ import("/srv/page-cskh/app/src/knowledge.mjs").then(({retrieve})=>{
 Follow `docs/VPS-BUILD.md`. Order matters: setup refuses to run in `mode=live`,
 and it requires the runtime outside the code dir. Start in `draft`, then switch
 to `live` and regenerate the config.
+
+## 6. Post to the Page (marketing drafts)
+
+The marketing publisher runs inside the same service (`config.json` →
+`marketing.enabled`). Check that flag first: while it is false every call answers
+`409 marketing disabled` and no retry changes that.
+
+The operator interface is the **admin API on loopback**. There is no CLI command for
+this, and Telegram has no command that *creates* a post — only `/editpost <id>
+<caption>` to rewrite a draft that already exists. `$AT` is `CSKH_ADMIN_TOKEN` from
+`runtime/.env`; read it inside the command, **never print it**:
+
+```bash
+AT=$(grep '^CSKH_ADMIN_TOKEN=' "$RUNTIME/.env" | cut -d= -f2-)
+A=http://127.0.0.1:3001
+AUTH="Authorization: Bearer $AT"
+
+# 1. Draft. auto-draft picks the topic out of the KB itself; draft uses your prompt.
+curl -s -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"instruction":"giới thiệu ba chỉ bò đang bán"}' "$A/marketing/auto-draft"
+curl -s -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"prompt":"viết bài về cá hồi"}' "$A/marketing/draft"
+
+# 2. List drafts with their SEO score, hashtags, images and source_ids
+curl -s -H "$AUTH" "$A/marketing/posts"
+
+# 3. Approve, then publish. Approve is mandatory — publish without it is refused.
+curl -s -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{"approvedBy":"<name>"}' "$A/marketing/posts/<id>/approve"
+curl -s -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+  -d '{}' "$A/marketing/posts/<id>/publish"
+```
+
+Other actions: `/schedule {"scheduledAt":"2026-10-15T20:00:00+07:00"}`,
+`/cancel {"reason":"..."}`, `/edit {"caption":"..."}`, `/regenerate`, `/reconcile`,
+and `GET /marketing/permissions`.
+
+Rules that matter:
+
+- **Show the owner the caption, SEO score, hashtags and image ids, then wait for an
+  explicit "đăng"/"duyệt" before publishing.** A publish is a real public post on the
+  Page and there is no undo in the API — only a manual delete in the Page UI. Same
+  gate as a KB change.
+- **A draft may quote KB prices.** Publishing a price publicly is the owner's business
+  decision, not a technical one — raise it instead of publishing quietly. The numbers
+  come from the KB (`### Price model`), not from the model's imagination.
+- `approvalRequired` is true, `mode` must be `live`, and `maxPostsPerDay` (3) plus
+  `quietHours` (22:00–07:00) gate publishing. A refusal is not a bug: report the
+  reason instead of retrying in a loop.
+- Generation spends **two model calls and ~60–95 s**, which is why `agentTimeoutMs`
+  is 90000. `409 {"error":"Hermes completion timed out"}` means the completion
+  overran it — retry once, do not spam.
+- Every draft is audited in `fb_posts` / `fb_post_audit`; `GET /marketing/posts` is
+  the source of truth for status.
+- `GET /marketing/permissions` reads the Page token's grant through `debug_token`.
+  A probe failure is an endpoint/code problem, **not** evidence that the token lacks
+  a scope — read `scopes`/`granular_scopes` before ever telling the owner to reissue
+  a token.
+
+Telegram: the preview is sent from **`@tmfood_agent_fb_bot`** (the marketing bot) to
+`adminTelegramAllowedUsers`. It is deliberately *not* `@wednesday_agent_bot` — the
+Hermes gateway long-polls that one, and a webhook on it would kill the admin chat.
+The recipient must have `/start`ed the marketing bot or Telegram answers
+`chat not found`; the send is tolerant, so one unreachable admin does not break the
+other.
 
 ## Smoke questions after any KB change
 
