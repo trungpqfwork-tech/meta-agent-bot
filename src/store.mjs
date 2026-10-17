@@ -343,6 +343,8 @@ export class Store {
     return this.marketingPost(id);
   }
   marketingPost(id) { return this.db.prepare('SELECT * FROM fb_posts WHERE id=?').get(id); }
+  getMeta(key) { const row=this.db.prepare('SELECT value FROM meta WHERE key=?').get(String(key)); return row?.value ?? null; }
+  setMeta(key,value) { this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(String(key),String(value)); }
   listMarketingPosts({limit=100,status=null}={}) {
     if(status) return this.db.prepare('SELECT * FROM fb_posts WHERE status=? ORDER BY created DESC LIMIT ?').all(status,limit);
     return this.db.prepare('SELECT * FROM fb_posts ORDER BY created DESC LIMIT ?').all(limit);
