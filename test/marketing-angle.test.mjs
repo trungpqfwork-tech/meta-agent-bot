@@ -4,7 +4,7 @@ import { mkdtempSync,mkdirSync,writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../src/store.mjs';
-import { createMarketing,POST_ANGLES,pickAngle,captionRepeatRatio,REPEAT_MAX_RATIO } from '../src/marketing.mjs';
+import { createMarketing,POST_ANGLES,pickAngle,captionRepeatRatio,REPEAT_MAX_RATIO,stripDanglingQuestions,stripFreshClaimForCooked } from '../src/marketing.mjs';
 
 const CAP_A = [
   '🥩 LÕI VAI BÒ ACC - THỊT BÒ NHẬP KHẨU ÚC, BÁN BUÔN THEO THÙNG 20-24KG',
@@ -93,4 +93,25 @@ test('viết lại vẫn trùng khung thì gắn cờ template_repeat để ch�
   assert.equal(calls,2,'lượt đầu + 1 lượt viết lại vì trùng khung');
   const flags=JSON.parse(post.risk_flags||'[]');
   assert.ok(flags.some(f=>/^template_repeat_\d+pct$/.test(f)),'phải có cờ template_repeat, có: '+flags.join(','));
+});
+
+test('bỏ câu hỏi trống, giữ câu hỏi có trả lời', () => {
+  const bad='Mực ống làm sạch, khách hay hỏi mấy câu dưới đây 🦑\n\n❓ Rã đông có mất vị không?\n\n❓ Đóng gói theo quy cách nào?\n→ Túi 2kg cho khách mua về dùng.\n\n📞 Hotline: 0976778755 và 0962365073';
+  const r=stripDanglingQuestions(bad);
+  assert.equal(r.removed.length,1);
+  assert.ok(!/mất vị/.test(r.caption),'câu hỏi trống bị bỏ');
+  assert.ok(/Đóng gói theo quy cách nào/.test(r.caption),'câu hỏi có trả lời được giữ');
+  assert.ok(/Túi 2kg/.test(r.caption),'câu trả lời giữ nguyên');
+  const ok=stripDanglingQuestions('❓ Đóng gói theo quy cách nào?\n→ Túi 2kg.');
+  assert.equal(ok.removed.length,0);
+});
+
+test('câu hỏi nhắc "hàng chín" không bị coi là khẳng định hàng chín', () => {
+  const question='Mực ống làm sạch sơ chế sẵn 🦑\n\n❓ Hàng đông lạnh hay hàng chín?\n→ Hàng cấp đông sâu, rã đông là chế biến được.\n\nHàng cấp đông sâu, chất lượng giữ gần như hàng tươi sống.';
+  const r=stripFreshClaimForCooked(question);
+  assert.equal(r.removed.length,0,'không cắt câu so sánh của hàng sống');
+  const cooked='Tôm thẻ hấp, hàng hấp chín sẵn, đóng thùng 10 kg.\n\nChất lượng giữ gần như hàng tươi sống.';
+  const r2=stripFreshClaimForCooked(cooked);
+  assert.equal(r2.removed.length,1);
+  assert.ok(!/tươi sống/.test(r2.caption));
 });
