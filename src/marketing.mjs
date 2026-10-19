@@ -271,6 +271,11 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     if(priceStripped.caption) draft.caption=priceStripped.caption;
     draft.risk_flags=[...new Set([...draft.risk_flags,'price_line_removed'])].slice(0,20);
   }
+  const salesFormFixed=stripSalesFormLines(draft.caption);
+  if(salesFormFixed.removed.length) {
+    draft.caption=salesFormFixed.caption;
+    draft.risk_flags=[...new Set([...draft.risk_flags,'sales_form_removed'])].slice(0,20);
+  }
   const danglingFixed=stripDanglingQuestions(draft.caption);
   if(danglingFixed.removed.length) {
     draft.caption=danglingFixed.caption;
@@ -289,6 +294,24 @@ function validateDraft(raw,{docs=[],images=[],config=null,topic=''}={}) {
     draft.risk_flags=[...new Set([...draft.risk_flags,'image_id_not_in_shortlist'])].slice(0,20);
   }
   return draft;
+}
+// Chủ Page chốt 19/10/2026: bài đăng KHÔNG nêu hình thức bán (bán buôn / bán sỉ /
+// bán lẻ). Tài liệu KB vẫn ghi "Mặt hàng này chỉ bán buôn theo thùng, không bán lẻ"
+// (cần cho câu trả lời CSKH khi khách hỏi mua lẻ) nên bài viết phải tự lược bỏ; model
+// hay chép nguyên câu đó từ tài liệu.
+const SALES_FORM_LINE=/^[\s\u2714\u2705\u2022\u2023*+\u2192-]*((mặt\s*hàng|hàng)\s*(này\s*)?)?((chỉ|bán)\s*)*(bán\s*)?(buôn|sỉ|lẻ)\b/i;
+const SALES_FORM_HEAD=/^[\s\u2714\u2705\u2022\u2023*+\u2192-]*hình\s*thức\s*bán\b/i;
+const SALES_FORM_CLAUSE=/\s*(,|;|\s)\s*(chỉ\s*)?bán\s*(buôn|sỉ|lẻ)(\s*theo\s*thùng)?(\s*,?\s*không\s*bán\s*lẻ)?[\s.,;]*$/i;
+export function stripSalesFormLines(caption) {
+  const kept=[], removed=[];
+  for(const line of String(caption??'').split('\n')) {
+    const t=line.trim();
+    if(t && (SALES_FORM_LINE.test(t) || SALES_FORM_HEAD.test(t))) { removed.push(t); continue; }
+    const cleaned=line.replace(SALES_FORM_CLAUSE,'').replace(/\s+([.,;])/g,'$1').trimEnd();
+    if(t && cleaned.trim()!==t) removed.push(t);
+    kept.push(cleaned);
+  }
+  return {caption:kept.join('\n'), removed};
 }
 // Chủ Page chốt 15/10/2026: bài đăng KHÔNG để giá, giá chỉ tư vấn khi khách inbox.
 // Model vẫn có thể chép giá từ tài liệu KB, nên cắt hẳn dòng có giá trước khi lưu và
@@ -471,7 +494,7 @@ DẠNG BÀI HÔM NAY: "${angle.name}" - ${angle.brief}
 Bài phải đọc như một bài mới, KHÔNG khuân lại một khuôn. Không phải bài nào cũng "tiêu đề IN HOA -> đoạn 🔥 -> block ✅ -> dòng 💯 ${config.pageName} - nguồn hàng... -> gạch đầu dòng ✔ -> hotline": chỉ dùng những khối đó khi dạng bài cần, và câu mở bài/cách xuống dòng/độ dài phải khác bài gần nhất.
 1. Dòng đầu là câu mở cụ thể, gọn dưới 140 ký tự, nêu đúng sản phẩm; không mở bằng "ngày nay / bạn đang tìm kiếm" và không mở bằng câu hỏi rồi tự trả lời. Dạng "Ngắn gọn" không in hoa cả dòng.
 2. Mỗi dòng 1 ý, xuống dòng thoáng, không viết đoạn văn dài kiểu blog. Không lặp lại cùng một ý ở hai chỗ trong bài, và không dùng dòng nhãn trơ kiểu "Về bảo quản:" hay "Lưu ý khi dùng:" — viết thành câu. Độ dài theo dạng: dạng "Ngắn gọn" 3-5 dòng, các dạng khác 6-14 dòng.
-3. Chỉ dùng dữ kiện có trong tài liệu: sản phẩm, xuất xứ/thương hiệu, quy cách, nhóm khách, món/cách chế biến, bảo quản. Thiếu dữ kiện thì bỏ ý đó, không suy đoán và không mượn dữ kiện của mặt hàng khác.
+3. Chỉ dùng dữ kiện có trong tài liệu: sản phẩm, xuất xứ/thương hiệu, quy cách, nhóm khách, món/cách chế biến, bảo quản. Thiếu dữ kiện thì bỏ ý đó, không suy đoán và không mượn dữ kiện của mặt hàng khác. KHÔNG nêu hình thức bán — không viết "bán buôn", "bán sỉ", "bán lẻ", "chỉ bán buôn theo thùng", "không bán lẻ" hay mục "Hình thức bán" (chủ Page chốt 19/10/2026); quy cách đóng gói như "thùng 10 kg" thì vẫn được nêu.
 4. Emoji đúng sản phẩm, tiết chế theo mặt hàng (dạng "Ngắn gọn" tối đa 2 emoji). Không rải emoji mỗi dòng cho đủ.
 5. Dòng định vị "💯 ${config.pageName} - ..." CHỈ được dùng ở dạng "Món và cách dùng" và "Chọn hàng theo nhu cầu". Các dạng khác KHÔNG dùng dòng này.
 6. Nhóm khách/hoàn cảnh dùng nêu tự nhiên theo dạng, không lặp y nguyên cùng một danh sách "Bếp ăn / Nhà hàng / Khách sạn / Quán lẩu nướng" ở mọi bài.
