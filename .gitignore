@@ -19,3 +19,6 @@ knowledge.json
 products.json
 *.bak-*
 *.pre-import-bak
+
+# Crash dumps từ node/uv lúc thoát tiến trình (không commit)
+core.*
