@@ -61,6 +61,32 @@ export function docAssignedImageIds(docs=[], images=[]) {
   const available=new Set(arr(images).map(i=>String(i?.id ?? '')));
   return [...new Set(ids)].filter(id=>!available.size || available.has(id));
 }
+// Người gọi có thể chỉ đưa prompt mà không kèm source_ids (route /marketing/draft).
+// Khi đó phải tự suy tài liệu mặt hàng theo từ khoá: nếu để nguyên "toàn bộ tài
+// liệu", danh sách ảnh gửi model gồm ảnh của MỌI mặt hàng và model gán ảnh hàng
+// khác (ca thật 19/10/2026: nháp bắp chuột trâu 64 bị gán ảnh móng sau heo, SEO
+// 3/10, cờ image_pool_filtered_list_has_no_trau_image).
+export function normalizeForMatch(text) {
+  return String(text ?? '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+export function inferImageDocs(query, docs, {minScore=6, max=3}={}) {
+  const terms=[...new Set(normalizeForMatch(query).split(' ').filter(t=>t.length>=3))];
+  if(!terms.length) return [];
+  const scored=[];
+  for(const d of arr(docs)) {
+    const strong=normalizeForMatch(`${d.id ?? ''} ${d.title ?? ''}`);
+    const weak=normalizeForMatch(arr(d.keywords).join(' '));
+    let score=0;
+    for(const t of terms) {
+      if(strong.includes(t)) score+=2;
+      else if(weak.includes(t)) score+=1;
+    }
+    if(score>=minScore) scored.push({doc:d,score});
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  return scored.slice(0,max).map(x=>x.doc);
+}
 export function selectPostImages(config, {query='', caption='', docs=[], exclude=[], limit=12}={}) {
   let catalog;
   try { catalog = loadImageCatalog(config.imageCatalogFile).filter(i=>i.approved===true); }
@@ -502,7 +528,9 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
   async function generateDraft({prompt='',tone='',scheduledAt=0,stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery='',angle=POST_ANGLES[0],recentCaptions=[],recentAngles=[]}) {
     const allDocs=approvedDocs(config.knowledgeFile), allImages=approvedImages(config.imageCatalogFile);
     const allowed=new Set(arr(sourceIds));
-    const docs=withContactDocs(allowed.size ? allDocs.filter(d=>allowed.has(d.id)) : allDocs, allDocs);
+    const declared=allowed.size > 0;
+    const inferred=declared ? allDocs.filter(d=>allowed.has(d.id)) : inferImageDocs(String(imageQuery||prompt), allDocs);
+    const docs=withContactDocs(inferred.length ? inferred : allDocs, allDocs);
     // Truy vấn chọn ảnh phải là chủ đề + mặt hàng (sạch), không phải cả brief kèm
     // JSON tài liệu KB: brief dài làm ảnh sản phẩm khác lọt vào danh sách gửi model.
     const shortlist=selectPostImages(config,{query:String(imageQuery||prompt),docs,exclude:excludeImageIds});
@@ -527,7 +555,9 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
       let draft;
       try {
         const text=await complete({agentId:config.agentId,message:marketingPrompt(config,{prompt,tone,scheduledAt,feedback,stylePosts,angle:current},docs,images),system:'Bạn viết bài Facebook marketing và chỉ trả JSON.',timeoutMs:config.agentTimeoutMs});
-        draft=validateDraft(parseModelJson(text),{docs,images,config,topic:prompt});
+        // Phạm vi tài liệu suy từ từ khoá chỉ để định hướng prompt; kiểm tra source_ids
+        // vẫn dựa trên toàn bộ KB nên không chặn oan bài hợp lệ.
+        draft=validateDraft(parseModelJson(text),{docs:declared||inferred.length?docs:allDocs,images,config,topic:prompt});
       } catch(err) {
         // Model trả JSON hỏng hoặc thiếu key bắt buộc thì thử lại, đừng bỏ cả bài:
         // 18/10/2026 cron 9:00 chết hẳn vì "Expected property name or '}' in JSON".
@@ -550,7 +580,11 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     const minImages=Math.max(1,Number(config.marketing?.minImagesPerPost??3));
     const maxImages=6;
     const recentPosts=arr(store.listMarketingPosts({limit:10}));
-    const alreadyUsed=recentPosts
+    // Nháp đã huỷ/xoá/lỗi chưa từng lên Page nên ảnh của nó không tính là "đã dùng":
+    // nếu tính, bài tạo lại cho cùng mặt hàng sẽ hết ảnh đúng và model gán ảnh hàng
+    // khác (ca thật 19/10/2026: bắp chuột trâu bị gán ảnh móng sau heo, SEO 3/10).
+    const imagePosts=recentPosts.filter(p=>!['cancelled','deleted','failed'].includes(String(p.status)));
+    const alreadyUsed=imagePosts
       .flatMap(p=>arr(JSON.parse(p.media||'[]')).map(m=>m?.image_id)).filter(Boolean).map(String);
     // Rào chống khuân mẫu: so với 3 bài gần nhất; trùng >=40% số dòng thì viết lại
     // bằng dạng khác (chủ Page chốt 17/10/2026).
@@ -561,7 +595,10 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     const exclude=[...new Set([...arr(excludeImageIds).map(String), ...alreadyUsed])];
     const imageQueryText=String(imageQuery||prompt);
     const {draft,seo,minScore,angle:usedAngle,repeat}=await generateDraft({prompt,tone,scheduledAt,stylePosts,sourceIds,excludeImageIds:exclude,imageQuery:imageQueryText,angle,recentCaptions,recentAngles});
-    const selected=arr(sourceIds).length ? approvedDocs(config.knowledgeFile).filter(d=>sourceIds.includes(d.id)) : [];
+    const allDocsForImages=approvedDocs(config.knowledgeFile);
+    const selected=arr(sourceIds).length
+      ? allDocsForImages.filter(d=>sourceIds.includes(d.id))
+      : inferImageDocs(imageQueryText, allDocsForImages).filter(isProductishDoc);
     const shortlist=selectPostImages(config,{query:imageQueryText,caption:draft.caption,docs:selected,exclude});
     // Tài liệu gán đủ ảnh cho mặt hàng thì bài dùng đúng bộ ảnh đó, không để model
     // chọn ảnh hàng khác (ca thật 15/10/2026: bài tôm thẻ bị gán ảnh đùi gà, đuôi heo).
