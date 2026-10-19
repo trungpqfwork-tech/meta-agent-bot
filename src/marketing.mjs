@@ -512,7 +512,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
     // Số lượt: lượt đầu + số lượt sửa theo điểm SEO + 1 lượt cho rào chống lặp khung.
     const maxAttempts=1+reviseAttempts+1;
     let best=null, bestSeo=null, bestRepeat=null, bestAngle=angle;
-    let current=angle; const tried=[];
+    let current=angle; const tried=[]; let lastError=null;
     for(let attempt=0; attempt<maxAttempts; attempt++) {
       const seoFeedback=attempt!==0 && minScore>0 && bestSeo && bestSeo.score<minScore ? [
         `Bản trước bị chấm ${bestSeo.score}/10, dưới ngưỡng ${minScore}/10.`,
@@ -524,9 +524,16 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
         `Viết lại theo dạng "${current.name}" với câu mở bài, cách trình bày và độ dài KHÁC HẲN, không dùng lại các dòng đã có ở bài đó.`
       ].join(' ') : '';
       const feedback=[seoFeedback,repeatFeedback].filter(Boolean).join(' ');
-      const text=await complete({agentId:config.agentId,message:marketingPrompt(config,{prompt,tone,scheduledAt,feedback,stylePosts,angle:current},docs,images),system:'Bạn viết bài Facebook marketing và chỉ trả JSON.',timeoutMs:config.agentTimeoutMs});
-      const parsed=parseModelJson(text);
-      const draft=validateDraft(parsed,{docs,images,config,topic:prompt});
+      let draft;
+      try {
+        const text=await complete({agentId:config.agentId,message:marketingPrompt(config,{prompt,tone,scheduledAt,feedback,stylePosts,angle:current},docs,images),system:'Bạn viết bài Facebook marketing và chỉ trả JSON.',timeoutMs:config.agentTimeoutMs});
+        draft=validateDraft(parseModelJson(text),{docs,images,config,topic:prompt});
+      } catch(err) {
+        // Model trả JSON hỏng hoặc thiếu key bắt buộc thì thử lại, đừng bỏ cả bài:
+        // 18/10/2026 cron 9:00 chết hẳn vì "Expected property name or '}' in JSON".
+        lastError=err;
+        continue;
+      }
       const seo=scoreMarketingSeo(draft);
       const repeat=captionRepeatRatio(draft.caption,recentCaptions);
       const seoOk=minScore<=0 || seo.score>=minScore;
@@ -535,6 +542,7 @@ export function createMarketing(config,store,complete,meta,{setIntervalFn=setInt
       if(!best || seo.score>bestSeo.score) { best=draft; bestSeo=seo; bestRepeat=repeat; bestAngle=current; }
       if(!repeatOk) { tried.push(current.id); current=pickAngle(recentAngles,{exclude:tried}); }
     }
+    if(!best) throw lastError ?? new Error('marketing draft failed');
     return {draft:best,seo:bestSeo,minScore,angle:bestAngle,repeat:bestRepeat};
   }
   async function createDraft({prompt='',tone='',scheduledAt=0,approvedBy='admin',stylePosts=[],sourceIds=null,excludeImageIds=[],imageQuery=''}={}) {

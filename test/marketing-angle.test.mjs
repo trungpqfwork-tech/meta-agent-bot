@@ -127,3 +127,16 @@ test('bài thứ 4 chọn dạng chưa dùng trong 3 bài gần nhất', () => {
   const all=POST_ANGLES.map(a=>a.id);
   assert.ok(pickAngle(all,{exclude:[POST_ANGLES[0].id,POST_ANGLES[1].id,POST_ANGLES[2].id,POST_ANGLES[3].id]}).id!==all[0]);
 });
+
+test('model trả JSON hỏng lần đầu thì thử lại chứ không bỏ cả bài',async t=>{
+  const {c,s}=fixture(t);
+  let calls=0;
+  const complete=async ()=>{
+    calls++;
+    if(calls===1) return '```json\n{ caption: "hỏng", }\n```';
+    return JSON.stringify(draftJson(CAP_NEW));
+  };
+  const post=await createMarketing(c,s,complete,{}).createDraft({prompt:'viết bài mực ống'});
+  assert.equal(calls,2,'phải gọi lại model sau khi JSON hỏng');
+  assert.equal(post.caption,CAP_NEW);
+});
