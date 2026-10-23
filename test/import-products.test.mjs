@@ -4,13 +4,22 @@ import { existsSync,mkdtempSync,mkdirSync,readFileSync,writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { buildImportPlan,cleanupValue,inferCategory,selectSheets } from '../scripts/import-products.mjs';
+import { buildImportPlan,cleanupValue,contentForProduct,inferCategory,selectSheets } from '../scripts/import-products.mjs';
 
 function runtime(t) {
   const dir=mkdtempSync(join(tmpdir(),'page-cskh-import-test-'));
   mkdirSync(dir,{recursive:true});
   return dir;
 }
+
+test('product document carries carton weight so CSKH can answer "thung bao nhieu kg"',()=>{
+  const doc=contentForProduct({
+    name:'Ba chỉ bò', category:'bò', origins:['Canada'],
+    brands:[{name:'Excel',traits:['vị béo'],bestFor:['lẩu'],packSizeWholesale:'thùng (20 - 30kg)'}],
+    useCases:['lẩu'], images:[]
+  });
+  assert.match(doc,/quy cách thùng \(20 - 30kg\)/);
+});
 
 test('category inference never reads an animal term out of the middle of another word',()=>{
   // "canh" contains "ca": without anchored terms this pork cut was classified as cá.

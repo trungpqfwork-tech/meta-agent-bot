@@ -313,7 +313,7 @@ function mergeProduct(existing, incoming) {
     approved: incoming.approved ?? existing.approved ?? true
   };
 }
-function contentForProduct(p) {
+export function contentForProduct(p) {
   const lines = [`Tên sản phẩm: ${p.name}`];
   if(p.category) lines.push(`Nhóm: ${p.category}`);
   if(p.origins?.length) lines.push(`Xuất xứ: ${p.origins.join(', ')}`);
@@ -326,6 +326,7 @@ function contentForProduct(p) {
       const details = [
         b.traits?.length ? `đặc tính ${b.traits.join(', ')}` : '',
         b.bestFor?.length ? `phù hợp ${b.bestFor.join(', ')}` : '',
+        b.packSizeWholesale ? `quy cách ${b.packSizeWholesale}` : '',
         priceLine(b)
       ].filter(Boolean).join('; ');
       grouped.set(details, [...(grouped.get(details) ?? []), b.name]);
