@@ -61,4 +61,5 @@ test('prompt gửi model có quy tắc cấm nêu hình thức bán',async t=>{
   assert.ok(seen.length>=1,'có gọi model');
   assert.match(seen[0],/KHÔNG nêu hình thức bán/);
   assert.match(seen[0],/bán sỉ/);
+  assert.match(seen[0],/KHÔNG tự so sánh với thương hiệu khác/);
 });
